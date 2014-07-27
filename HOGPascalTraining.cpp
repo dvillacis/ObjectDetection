@@ -119,98 +119,80 @@ static void getSamples(const string& sampleListPath, vector<string>& posFilename
   }
 }
 
-static void printFeaturesToFile(Mat& selection, const string& imageFilename, vector<float>& featureVector, HOGDescriptor& hog, bool c, fstream& File){
-  //Resize the image to match the hog size
-  Size size(64,128);
-  resize(selection,selection,size);
-
-  //Check a valid image input
-  if(selection.empty()){
-    featureVector.clear();
-    cout << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!" << endl;
-    return;
-  }
-
-  //Check a valid image size
-  if(selection.cols != hog.winSize.width || selection.rows != hog.winSize.height){
-    featureVector.clear();
-    cout << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
-      << "x" << selection.rows << ") do not match HOG window size (" << hog.winSize.width 
-      << "x" << hog.winSize.height << ")" << endl;
-  }
-  vector<Point> locations;
-  hog.compute(selection, featureVector, winStride, trainingPadding, locations);
-  selection.release();
-
-  if(!featureVector.empty()){
-      // Add a class label depending on the source folder
-      File << (c ?"+1":"-1");
-
-      // Save the feature vector components
-      for(unsigned int feature = 0; feature < featureVector.size(); ++feature){
-      File << " " << (feature+1) << ":" << featureVector.at(feature);
-    }
-    File << endl;
-  }
-}
-
-static void calculateFeaturesFromInput(const string& imageFilename, vector<float>& featureVector, HOGDescriptor& hog, bool c, fstream& File){
+static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, SVMLight::SVMTrainer& svm){
   Mat imageData = imread(imageFilename, 0);
   vector<Rect> posRegions;
   vector<Rect> negRegions;
   //Find the bounding box (ROI) in the annotations and cut the image
   getROI(imageFilename, posRegions, negRegions);
   for(int roi = 0; roi < posRegions.size(); ++roi){
+    cout << "\t\tPositive Patch Found" << endl;
+    vector<float> featureVector;
     Mat selection = imageData(posRegions[roi]);
-
+    cout << "\t\tPatch size: " << selection.cols << " x " << selection.rows << "\t";
+    resize(selection,selection,hog.winSize);
+    cout << "\t\tAfter resize: " << selection.cols << " x " << selection.rows <<  endl;
     //Show the training image cutted from the original image
-    // if(c)
-    //   imshow(category+" Positive ",selection);
-    // else
-    //   imshow(category+" Negative ",selection);
-    // waitKey(0);
+    // imshow(category+" positive ",selection);
+    // waitKey(0); 
 
-    printFeaturesToFile(selection, imageFilename, featureVector, hog, true, File);    
+    //Check a valid image input
+    if(selection.empty()){
+      featureVector.clear();
+      cout << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!" << endl;
+      return;
+    }
+
+    //Check a valid image size
+    if(selection.cols != hog.winSize.width || selection.rows != hog.winSize.height){
+      featureVector.clear();
+      cout << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
+        << "x" << selection.rows << ") do not match HOG window size (" << hog.winSize.width 
+        << "x" << hog.winSize.height << ")" << endl;
+    }
+
+    hog.compute(selection,featureVector,Size(8,8),Size(0,0));
+    cout << "\t\tComputed patch HOG features" << endl;
+    svm.writeFeatureVectorToFile(featureVector,true); 
+    selection.release();
+    featureVector.clear();
+    cout << "\t\tClean exit" << endl;
   }
   for(int roi = 0; roi < negRegions.size(); ++roi){
+    cout << "\t\tNegative Patch Found" << endl;
+    vector<float> featureVector;
     Mat selection = imageData(negRegions[roi]);
-
+    cout << "\t\t ROI: " << negRegions[roi].tl() << "-" << negRegions[roi].br() << endl;
+    cout << "\t\tPatch size: " << selection.cols << " x " << selection.rows << "\t";
+    resize(selection,selection,hog.winSize);
+    cout << "\t\tAfter resize: " << selection.cols << " x " << selection.rows <<  endl;
     //Show the training image cutted from the original image
-    // if(c)
-    //   imshow(category+" Positive ",selection);
-    // else
-    //   imshow(category+" Negative ",selection);
-    // waitKey(0);
+    // imshow(category+" positive ",selection);
+    // waitKey(0); 
 
-    printFeaturesToFile(selection, imageFilename, featureVector, hog, false, File);    
-  }
-}
-
-static void saveDescriptorVectorToFile(vector<float>& descriptorVector, vector<unsigned int>& _vectorIndices, string filename){
-  cout << "Saving descriptor vector to file " << filename.c_str() << endl;
-  string separator = " ";
-  fstream File;
-  float percent;
-  File.open(filename.c_str(), ios::out);
-  if(File.good() && File.is_open()){
-    cout << "Saving descriptor vector features: \t" << endl;
-    storeCursor();
-    for(int feature = 0; feature < descriptorVector.size(); ++feature){
-      if((feature%300 == 0)||(feature == (descriptorVector.size()-1))){
-        percent = ((1+feature)*100)/descriptorVector.size();
-        printf("%4u (%3.0f%%)...",feature,percent);
-        fflush(stdout);
-        resetCursor();
-      }
-      File << descriptorVector.at(feature) << separator;
+    //Check a valid image input
+    if(selection.empty()){
+      featureVector.clear();
+      cout << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!" << endl;
+      return;
     }
-    printf("\n");
-    File << endl;
-    File.flush();
-    File.close();
+
+    //Check a valid image size
+    if(selection.cols != hog.winSize.width || selection.rows != hog.winSize.height){
+      featureVector.clear();
+      cout << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
+        << "x" << selection.rows << ") do not match HOG window size (" << hog.winSize.width 
+        << "x" << hog.winSize.height << ")" << endl;
+    }
+
+    hog.compute(selection,featureVector,Size(8,8),Size(0,0));
+    cout << "\t\tComputed patch HOG features" << endl;
+    svm.writeFeatureVectorToFile(featureVector,false); 
+    selection.release();
+    featureVector.clear();
+    cout << "\t\tClean exit" << endl;
   }
-  else
-    cout << "Error writing the file " << filename.c_str() << endl;
+  imageData.release();              // we don't need the original image anymore
 }
 
 static void showDetections(const vector<Rect>& found, Mat& imageData){
@@ -242,8 +224,15 @@ static void detectTest(const HOGDescriptor& hog, Mat& imageData){
   showDetections(found, imageData);
 }
 
-static void test(HOGDescriptor& hog, vector<float>& descriptorVector){
+static void test(){
+  HOGDescriptor hog;
+  hog.winSize = Size(64,128);
+  SVMLight::SVMClassifier classifier(svmModelFile);
+  cout << "Getting the Classifier" << endl;
+  vector<float> descriptorVector = classifier.getDescriptorVector();
+  cout << "Getting the Descriptor Vector" << endl;
   hog.setSVMDetector(descriptorVector);
+  cout << "Applied the descriptor to the hog class" << endl;
   //hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
   vector<string> testImagesPos;
   vector<string> testImagesNeg;
@@ -258,6 +247,7 @@ static void test(HOGDescriptor& hog, vector<float>& descriptorVector){
 
 int main(int argc, char** argv){
   HOGDescriptor hog;
+  hog.winSize = Size(64,128);
   category = argv[1];
   
   //Get the positive and negative training samples
@@ -286,52 +276,36 @@ int main(int argc, char** argv){
   cout << "Generating the HOG features and saving it in file "<< featuresFile.c_str() << endl;
   float percent;
 
-  fstream File;
-  File.open(featuresFile.c_str(),ios::out);
-  if(File.good() && File.is_open()){
-    //Iterate over sample images
-    for(unsigned long currentFile = 0; currentFile < overallSamples; ++currentFile){
-      storeCursor();
-      vector<float> featureVector;
-      const string currentImageFile = currentFile < positiveTrainingImages.size() ? positiveTrainingImages.at(currentFile): negativeTrainingImages.at(currentFile-positiveTrainingImages.size());
-      
-      // Output progress
-      if((currentFile+1)%1 == 0 || currentFile+1 == overallSamples){
-        percent = ((currentFile+1)*100)/overallSamples;
-        printf("%5lu (%3.0f%%):\t File'%s'\n",(currentFile+1),percent,currentImageFile.c_str());
-        fflush(stdout);
-        resetCursor();
-      }
-      
-      // Calculate feature vector for the current image file
-      bool c = (currentFile < positiveTrainingImages.size());
-      calculateFeaturesFromInput(currentImageFile, featureVector, hog, c, File);
-      
+  SVMLight::SVMTrainer svm(featuresFile.c_str());
+  //Iterate over sample images
+  for(unsigned long currentFile = 0; currentFile < overallSamples; ++currentFile){
+    storeCursor();
+    const string currentImageFile = currentFile < positiveTrainingImages.size() ? positiveTrainingImages.at(currentFile): negativeTrainingImages.at(currentFile-positiveTrainingImages.size());
+    
+    // Output progress
+    if((currentFile+1)%1 == 0 || currentFile+1 == overallSamples){
+      percent = ((currentFile+1)*100)/overallSamples;
+      printf("%5lu (%3.0f%%):\t File'%s'\n",(currentFile+1),percent,currentImageFile.c_str());
+      fflush(stdout);
+      resetCursor();
     }
-    printf("\n");
-    File.flush();
-    File.close();
+    
+    // Calculate feature vector for the current image file
+    calculateFeaturesFromInput(currentImageFile, hog, svm);
+    
+    //os.clear(); os.seekp(0);    // reset string stream
+
   }
-  else{
-    cout << "Error opening file: " << featuresFile.c_str() << endl;
-    return -1;
-  }
+  printf("\n");
+  cout << "Finished writing the features" << endl;
 
   // Starting the training of the model
   cout << "Starting the training of the model using SVMLight" << endl;
-  SVMLightWrapper::getInstance()->read_problem(const_cast<char*>(featuresFile.c_str()));
-  SVMLightWrapper::getInstance()->train();
-  cout << "Model trained" << endl;
-  SVMLightWrapper::getInstance()->saveModelToFile(svmModelFile);
-
-  // Getting a representative HOG feature vector using the support vectors obtained
-  vector<float> descriptorVector;
-  vector<unsigned int> descriptorVectorIndices;
-  SVMLightWrapper::getInstance()->getSingleDetectingVector(descriptorVector, descriptorVectorIndices);
-  saveDescriptorVectorToFile(descriptorVector, descriptorVectorIndices, descriptorVectorFile);
-
+  svm.trainAndSaveModel(svmModelFile);
+  cout << "SVM Model saved to " << svmModelFile << endl;
+  
   // Test the just trained descriptor
-  test(hog,descriptorVector);
+  test();
 
   return 0;
 }
