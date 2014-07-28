@@ -38,7 +38,7 @@ namespace SVMLight
             learn_parm = new LEARN_PARM;
             kernel_parm = new KERNEL_PARM;
             // Init parameters
-            verbosity = 1; // Show some messages -v 1
+            verbosity = 2; // Show some messages -v 1
             learn_parm->alphafile[0] = NULL;
             learn_parm->biased_hyperplane = 1;
             learn_parm->sharedslack = 0; // 1

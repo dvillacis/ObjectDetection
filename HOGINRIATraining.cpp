@@ -14,8 +14,9 @@ using namespace cv;
 using namespace tinyxml2;
 
 //Parameter Definitions
-static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/train_64x128_H96/";
+static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/Train/";
 static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
+static string annotationsPath = "/Users/david/Documents/Development/INRIAPerson/Train/annotations/";
 static string featuresFile = "/Users/david/Documents/HOGINRIATraining/genfiles/features.dat";
 static string svmModelFile = "/Users/david/Documents/HOGINRIATraining/genfiles/svmModel.dat";
 static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
@@ -73,7 +74,7 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
       string tempExt = string(ep->d_name).substr(extensionLocation+1);
       if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
         posFilenames.push_back((string)posPath + ep->d_name);
-        cout << "Adding " << (string)posPath + ep->d_name << " to the positive training samples" << endl;
+        //cout << "Adding " << (string)posPath + ep->d_name << " to the positive training samples" << endl;
       }
     }
   }
@@ -83,7 +84,7 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
     int i = 0;
     while((ep = readdir(dp))){
       i++;
-      if(i == 100)
+      if(i == 80)
         break;
       if(ep->d_type & DT_DIR){
         continue;
@@ -92,23 +93,74 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
       string tempExt = string(ep->d_name).substr(extensionLocation+1);
       if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
         negFilenames.push_back((string)negPath + ep->d_name);
-        cout << "Adding " << (string)negPath + ep->d_name << " to the negative training samples" << endl;
+        //cout << "Adding " << (string)negPath + ep->d_name << " to the negative training samples" << endl;
       }
     }
   }
   return;
 }
 
+static vector<Rect> getROI(const string& imageFilename){
+  //Get the annotation filename
+  vector<string> parts = split(imageFilename,"/");
+  string imageName = split(parts[parts.size()-1],".")[0];
+  string annPath = annotationsPath+imageName+".txt";
+  //cout << annPath << endl;
+
+  vector<Rect> bboxes;
+  fstream annFile;
+  annFile.open(annPath.c_str(),ios::in);
+  if(annFile.good() && annFile.is_open()){
+    string line;
+    while(getline(annFile,line)){
+      if(line.find("Bounding box for object") != string::npos){
+        string temp = split(line," : ")[1];
+        vector<string> coords = split(temp," - ");
+        int xmin = atoi(split(coords[0],", ")[0].erase(0,1).c_str());
+        int ymin = atoi(split(coords[0],", ")[1].c_str());
+        int xmax = atoi(split(coords[1],", ")[0].erase(0,1).c_str());
+        int ymax = atoi(split(coords[1],", ")[1].c_str());
+        bboxes.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+      }
+    }
+    annFile.close();
+  }
+  else
+    cout << "Couldnt open annotations file for: " << annPath << endl;
+  
+  return bboxes;
+}
+
 static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, SVMLight::SVMTrainer& svm, bool c){
   Mat imageData = imread(imageFilename, CV_LOAD_IMAGE_GRAYSCALE);
-  //resize(imageData,imageData,hog.winSize);
-  vector<float> featureVector;
-  hog.compute(imageData,featureVector,Size(8,8),Size(0,0));
-  //cout << "\t\tComputed patch HOG features" << endl;
-  svm.writeFeatureVectorToFile(featureVector,c); 
+
+  //Finding person bounding boxes inside the image
+  if(c==true){
+    vector<Rect> ROI = getROI(imageFilename);
+    for(int i = 0; i < ROI.size(); ++i){
+      Mat patch = imageData(ROI[i]);
+      // imshow("Training Image (+)",patch);
+      // waitKey(0);
+
+      resize(patch,patch,Size(50,50));
+      vector<float> featureVector;
+      hog.compute(patch,featureVector,Size(8,8),Size(0,0));
+      svm.writeFeatureVectorToFile(featureVector,c); 
+      patch.release();
+      featureVector.clear();
+    }
+  }
+  else{
+    // imshow("Training Image (-)",imageData);
+    // waitKey(0);
+
+    resize(imageData,imageData,Size(32,48));
+    vector<float> featureVector;
+    hog.compute(imageData,featureVector,Size(8,8),Size(0,0));
+    svm.writeFeatureVectorToFile(featureVector,c); 
+    featureVector.clear();
+  }
   imageData.release();
-  featureVector.clear();
-  //cout << "\t\tClean exit" << endl; 
 }
 
 static void showDetections(const vector<Rect>& found, Mat& imageData){
@@ -142,9 +194,8 @@ static void detectTest(const HOGDescriptor& hog, Mat& imageData){
 
 static void test(){
   HOGDescriptor hog;
-  hog.winSize = Size(64,128);
+  hog.winSize = Size(32,48);
   SVMLight::SVMClassifier classifier(svmModelFile);
-  cout << "Getting the Classifier" << endl;
   vector<float> descriptorVector = classifier.getDescriptorVector();
   cout << "Getting the Descriptor Vector" << endl;
   hog.setSVMDetector(descriptorVector);
@@ -158,9 +209,17 @@ static void test(){
   validExtensions.push_back("png");
 
   getSamples(testPath, testImagesPos, testImagesNeg, validExtensions);
-  for(int i = 0; i < testImagesPos.size(); ++i){
+  // for(int i = 0; i < testImagesPos.size(); ++i){
+  for(int i = 0; i < 10; ++i){
     cout << "Testing image: " << testImagesPos[i] << endl;
     Mat image = imread(testImagesPos[i],CV_LOAD_IMAGE_GRAYSCALE);
+    detectTest(hog,image);
+    imshow("HOG Custom Detection",image);
+    waitKey(0);
+  }
+  for(int i = 0; i < 10; ++i){
+    cout << "Testing image: " << testImagesNeg[i] << endl;
+    Mat image = imread(testImagesNeg[i],CV_LOAD_IMAGE_GRAYSCALE);
     detectTest(hog,image);
     imshow("HOG Custom Detection",image);
     waitKey(0);
@@ -169,7 +228,7 @@ static void test(){
 
 int main(int argc, char** argv){
   HOGDescriptor hog;
-  hog.winSize = Size(64,128);
+  hog.winSize = Size(32,48);
   
   //Get the positive and negative training samples
   static vector<string> positiveTrainingImages;
