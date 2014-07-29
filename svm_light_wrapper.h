@@ -5,24 +5,26 @@
 #include <string>
 #include <fstream>
 
+using namespace std;
+
 namespace SVMLight
 {
     extern class SVMTrainer
     {
     private:
-        std::fstream featuresFile_;
-        std::string featuresFileName_;
+        fstream featuresFile_;
+        string featuresFileName_;
     public:
-        SVMTrainer(const std::string& featuresFileName);
-        void writeFeatureVectorToFile(const std::vector<float>& featureVector, bool isPositive);
-        void trainAndSaveModel(const std::string& modelFileName);
+        SVMTrainer(const string& featuresFileName);
+        void writeFeatureVectorToFile(const vector<float>& featureVector, bool isPositive);
+        void trainAndSaveModel(const string& modelFileName);
     };
 
     extern class SVMClassifier
     {
     public:
-        SVMClassifier(const std::string& featuresFileName);
-        std::vector<float> getDescriptorVector();
+        SVMClassifier(const string& featuresFileName);
+        vector<float> getDescriptorVector();
     };
 }
 

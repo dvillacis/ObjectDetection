@@ -2,6 +2,7 @@
 #include <ios>
 #include <string>
 #include <fstream>
+#include <iostream>
 #include "svm_light_wrapper.h"
 
 /**
@@ -11,6 +12,8 @@
  *    https://github.com/DaHoC/trainHOG
  * 
  */
+
+ using namespace std;
 
 namespace SVMLight 
 {
@@ -38,7 +41,7 @@ namespace SVMLight
             learn_parm = new LEARN_PARM;
             kernel_parm = new KERNEL_PARM;
             // Init parameters
-            verbosity = 2; // Show some messages -v 1
+            verbosity = 1; // Show some messages -v 1
             learn_parm->alphafile[0] = NULL;
             learn_parm->biased_hyperplane = 1;
             learn_parm->sharedslack = 0; // 1
@@ -94,16 +97,16 @@ namespace SVMLight
             return &theInstance;
         }
 
-        inline void saveModelToFile(const std::string& _modelFileName) {
+        inline void saveModelToFile(const string& _modelFileName) {
             write_model(const_cast<char*>(_modelFileName.c_str()), model);
         }
 
-        void loadModelFromFile(const std::string& _modelFileName) {
+        void loadModelFromFile(const string& _modelFileName) {
             this->model = read_model(const_cast<char*>(_modelFileName.c_str()));
         }
 
         // read in a problem (in SVMLightImpl format)
-        void read_problem(const std::string& filename) {
+        void read_problem(const string& filename) {
             // Reads and parses the specified file
             read_documents(const_cast<char*> (filename.c_str()), &docs, &target, &totwords, &totdoc);
         }
@@ -122,7 +125,7 @@ namespace SVMLight
          * @param singleDetectorVector resulting single detector vector for use in openCV HOG
          * @param singleDetectorVectorIndices
          */
-        void getSingleDetectingVector(std::vector<float>& singleDetectorVector, std::vector<unsigned int>& singleDetectorVectorIndices) {
+        void getSingleDetectingVector(vector<float>& singleDetectorVector, vector<unsigned int>& singleDetectorVectorIndices) {
             // Now we use the trained svm to retrieve the single detector vector
             DOC** supveclist = model->supvec;
             printf("Calculating single descriptor vector out of support vectors (may take some time)\n");
@@ -130,10 +133,11 @@ namespace SVMLight
             singleDetectorVector.clear();
             singleDetectorVector.resize(model->totwords + 1, 0.);
             printf("Resulting vector size %lu\n", singleDetectorVector.size());
-        
+
             // Walk over every support vector
             for (long ssv = 1; ssv < model->sv_num; ++ssv) { // Don't know what's inside model->supvec[0] ?!
                 // Get a single support vector
+                //cout << "Support vector #" << ssv << endl;
                 DOC* singleSupportVector = supveclist[ssv]; // Get next support vector
                 SVECTOR* singleSupportVectorValues = singleSupportVector->fvec;
                 WORD singleSupportVectorComponent;
@@ -152,25 +156,25 @@ namespace SVMLight
 
     // SVMTrainer & SVMClassifier implementations:
 
-    SVMTrainer::SVMTrainer(const std::string& featuresFileName)
+    SVMTrainer::SVMTrainer(const string& featuresFileName)
     {
         // use the C locale while creating the model file:
         setlocale(LC_ALL, "C");
 
         featuresFileName_ = featuresFileName;
-        featuresFile_.open(featuresFileName_.c_str(), std::ios::out);
+        featuresFile_.open(featuresFileName_.c_str(), ios::out);
     }
 
-    void SVMTrainer::writeFeatureVectorToFile(const std::vector<float>& featureVector, bool isPositive)
+    void SVMTrainer::writeFeatureVectorToFile(const vector<float>& featureVector, bool isPositive)
     {
         featuresFile_ << ((isPositive) ? "+1" : "-1");
         for (unsigned int feature = 0; feature < featureVector.size(); ++feature) {
             featuresFile_ << " " << (feature + 1) << ":" << featureVector.at(feature);
         }
-        featuresFile_ << std::endl;
+        featuresFile_ << endl;
     }
 
-    void SVMTrainer::trainAndSaveModel(const std::string& modelFileName)
+    void SVMTrainer::trainAndSaveModel(const string& modelFileName)
     {
         if (featuresFile_.is_open())
             featuresFile_.close();
@@ -180,15 +184,15 @@ namespace SVMLight
         SVMLightImpl::getInstance()->saveModelToFile(modelFileName);
     }
 
-    SVMClassifier::SVMClassifier(const std::string& modelFilename)
+    SVMClassifier::SVMClassifier(const string& modelFilename)
     {
          SVMLightImpl::getInstance()->loadModelFromFile(modelFilename);
     }
         
-    std::vector<float> SVMClassifier::getDescriptorVector()
+    vector<float> SVMClassifier::getDescriptorVector()
     {
-        std::vector<float> descriptorVector;
-        std::vector<unsigned int> descriptorVectorIndices;     
+        vector<float> descriptorVector;
+        vector<unsigned int> descriptorVectorIndices;     
         SVMLightImpl::getInstance()->getSingleDetectingVector(descriptorVector, descriptorVectorIndices);
         return descriptorVector;
     }

@@ -15,8 +15,7 @@ using namespace tinyxml2;
 
 //Parameter Definitions
 static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/Train/";
-static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
-static string annotationsPath = "/Users/david/Documents/Development/INRIAPerson/Train/annotations/";
+static string trainAnnotationsPath = "/Users/david/Documents/Development/INRIAPerson/Train/annotations/";
 static string featuresFile = "/Users/david/Documents/HOGINRIATraining/genfiles/features.dat";
 static string svmModelFile = "/Users/david/Documents/HOGINRIATraining/genfiles/svmModel.dat";
 static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
@@ -58,15 +57,15 @@ static vector<string> split(const string& s, const string& delim, const bool kee
 static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
   string posPath = listPath+"pos/";
   string negPath = listPath+"neg/";
-  cout << "Getting positive files in: " << sampleListPath << endl;
+  cout << "Getting positive files in: " << posPath << endl;
   struct dirent* ep;
   DIR* dp = opendir(posPath.c_str());
   if(dp!=NULL){
     int i = 0;
     while((ep = readdir(dp))){
-      i++;
-      if(i == 100)
-        break;
+      // i++;
+      // if(i == 100)
+      //   break;
       if(ep->d_type & DT_DIR){
         continue;
       }
@@ -78,14 +77,14 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
       }
     }
   }
-  cout << "Getting negative files in: " << sampleListPath << endl;
+  cout << "Getting negative files in: " << negPath << endl;
   dp = opendir(negPath.c_str());
   if(dp!=NULL){
     int i = 0;
     while((ep = readdir(dp))){
-      i++;
-      if(i == 80)
-        break;
+      // i++;
+      // if(i == 80)
+      //   break;
       if(ep->d_type & DT_DIR){
         continue;
       }
@@ -100,33 +99,45 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
   return;
 }
 
-static vector<Rect> getROI(const string& imageFilename){
+static string getAnnotation(const string& imageFilename, const string& annotationsPath){
   //Get the annotation filename
   vector<string> parts = split(imageFilename,"/");
   string imageName = split(parts[parts.size()-1],".")[0];
   string annPath = annotationsPath+imageName+".txt";
-  //cout << annPath << endl;
+  return annPath;
+}
 
+static vector<Rect> getROI(const string& imageFilename, bool c){
   vector<Rect> bboxes;
-  fstream annFile;
-  annFile.open(annPath.c_str(),ios::in);
-  if(annFile.good() && annFile.is_open()){
-    string line;
-    while(getline(annFile,line)){
-      if(line.find("Bounding box for object") != string::npos){
-        string temp = split(line," : ")[1];
-        vector<string> coords = split(temp," - ");
-        int xmin = atoi(split(coords[0],", ")[0].erase(0,1).c_str());
-        int ymin = atoi(split(coords[0],", ")[1].c_str());
-        int xmax = atoi(split(coords[1],", ")[0].erase(0,1).c_str());
-        int ymax = atoi(split(coords[1],", ")[1].c_str());
-        bboxes.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+  if(c == true){
+    string annPath = getAnnotation(imageFilename,trainAnnotationsPath);
+
+    fstream annFile;
+    annFile.open(annPath.c_str(),ios::in);
+    if(annFile.good() && annFile.is_open()){
+      string line;
+      while(getline(annFile,line)){
+        if(line.find("Bounding box for object") != string::npos){
+          string temp = split(line," : ")[1];
+          vector<string> coords = split(temp," - ");
+          int xmin = atoi(split(coords[0],", ")[0].erase(0,1).c_str());
+          int ymin = atoi(split(coords[0],", ")[1].c_str());
+          int xmax = atoi(split(coords[1],", ")[0].erase(0,1).c_str());
+          int ymax = atoi(split(coords[1],", ")[1].c_str());
+          bboxes.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+        }
       }
+      annFile.close();
     }
-    annFile.close();
+    else
+      cout << "Couldnt open annotations file for: " << annPath << endl;
   }
   else
-    cout << "Couldnt open annotations file for: " << annPath << endl;
+  {
+    //TODO: get the random images from the negative input
+    Mat im = imread(imageFilename,0);
+    bboxes.push_back(Rect(0,0,im.cols,im.rows));
+  }
   
   return bboxes;
 }
@@ -135,100 +146,27 @@ static void calculateFeaturesFromInput(const string& imageFilename, HOGDescripto
   Mat imageData = imread(imageFilename, CV_LOAD_IMAGE_GRAYSCALE);
 
   //Finding person bounding boxes inside the image
-  if(c==true){
-    vector<Rect> ROI = getROI(imageFilename);
-    for(int i = 0; i < ROI.size(); ++i){
-      Mat patch = imageData(ROI[i]);
-      // imshow("Training Image (+)",patch);
-      // waitKey(0);
-
-      resize(patch,patch,Size(50,50));
-      vector<float> featureVector;
-      hog.compute(patch,featureVector,Size(8,8),Size(0,0));
-      svm.writeFeatureVectorToFile(featureVector,c); 
-      patch.release();
-      featureVector.clear();
-    }
-  }
-  else{
-    // imshow("Training Image (-)",imageData);
+  vector<Rect> ROI = getROI(imageFilename,c);
+  for(int i = 0; i < ROI.size(); ++i){
+    Mat patch = imageData(ROI[i]);
+    // imshow("Training Image (+)",patch);
     // waitKey(0);
 
-    resize(imageData,imageData,Size(32,48));
+    resize(patch,patch,hog.winSize);
     vector<float> featureVector;
-    hog.compute(imageData,featureVector,Size(8,8),Size(0,0));
+    hog.compute(patch,featureVector,Size(8,8),Size(0,0));
     svm.writeFeatureVectorToFile(featureVector,c); 
+    patch.release();
     featureVector.clear();
   }
   imageData.release();
 }
 
-static void showDetections(const vector<Rect>& found, Mat& imageData){
-  vector<Rect> found_filtered;
-  size_t i, j;
-  for (i = 0; i < found.size(); ++i) {
-    Rect r = found[i];
-    for (j = 0; j < found.size(); ++j)
-      if (j != i && (r & found[j]) == r)
-  break;
-    if (j == found.size())
-      found_filtered.push_back(r);
-  }
-  for (i = 0; i < found_filtered.size(); i++) {
-    Rect r = found_filtered[i];
-    rectangle(imageData, r.tl(), r.br(), Scalar(64, 255, 64), 3);
-  }
 
-  cout << "Instances found: " << found_filtered.size() << endl;
-} 
-
-static void detectTest(const HOGDescriptor& hog, Mat& imageData){
-  vector<Rect> found;
-  int groupThreshold = 2;
-  Size padding(Size(32,32));
-  Size winStride(Size(8,8));
-  double hitThreshold = 0.;
-  hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.05,groupThreshold);
-  showDetections(found, imageData);
-}
-
-static void test(){
-  HOGDescriptor hog;
-  hog.winSize = Size(32,48);
-  SVMLight::SVMClassifier classifier(svmModelFile);
-  vector<float> descriptorVector = classifier.getDescriptorVector();
-  cout << "Getting the Descriptor Vector" << endl;
-  hog.setSVMDetector(descriptorVector);
-  cout << "Applied the descriptor to the hog class" << endl;
-  //hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
-
-  vector<string> testImagesPos;
-  vector<string> testImagesNeg;
-  static vector<string> validExtensions;
-  validExtensions.push_back("jpg");
-  validExtensions.push_back("png");
-
-  getSamples(testPath, testImagesPos, testImagesNeg, validExtensions);
-  // for(int i = 0; i < testImagesPos.size(); ++i){
-  for(int i = 0; i < 10; ++i){
-    cout << "Testing image: " << testImagesPos[i] << endl;
-    Mat image = imread(testImagesPos[i],CV_LOAD_IMAGE_GRAYSCALE);
-    detectTest(hog,image);
-    imshow("HOG Custom Detection",image);
-    waitKey(0);
-  }
-  for(int i = 0; i < 10; ++i){
-    cout << "Testing image: " << testImagesNeg[i] << endl;
-    Mat image = imread(testImagesNeg[i],CV_LOAD_IMAGE_GRAYSCALE);
-    detectTest(hog,image);
-    imshow("HOG Custom Detection",image);
-    waitKey(0);
-  }
-}
 
 int main(int argc, char** argv){
   HOGDescriptor hog;
-  hog.winSize = Size(32,48);
+  hog.winSize = Size(64,128);
   
   //Get the positive and negative training samples
   static vector<string> positiveTrainingImages;
@@ -288,8 +226,5 @@ int main(int argc, char** argv){
   svm.trainAndSaveModel(svmModelFile);
   cout << "SVM Model saved to " << svmModelFile << endl;
   
-  // Test the just trained descriptor
-  test();
-
   return 0;
 }
