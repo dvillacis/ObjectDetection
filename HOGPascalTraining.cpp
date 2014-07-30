@@ -13,6 +13,12 @@ using namespace std;
 using namespace cv;
 using namespace tinyxml2;
 
+extern "C" 
+{
+    #include "svm_common.h" 
+    #include "svm_learn.h"
+}
+
 //Parameter Definitions
 static string sampleListPath = "/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/ImageSets/Main/";
 static string sampleImagesPath = "/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/JPEGImages/";
@@ -301,7 +307,7 @@ int main(int argc, char** argv){
 
   // Starting the training of the model
   cout << "Starting the training of the model using SVMLight" << endl;
-  svm.trainAndSaveModel(svmModelFile);
+  svm.trainAndSaveModel(svmModelFile,LINEAR);
   cout << "SVM Model saved to " << svmModelFile << endl;
   
   // Test the just trained descriptor

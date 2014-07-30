@@ -12,9 +12,9 @@ using namespace cv;
 
 static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
 static string testAnnotationsPath = "/Users/david/Documents/Development/INRIAPerson/Test/annotations/";
-static string featuresFile = "/Users/david/Documents/HOGINRIATraining/genfiles/features.dat";
-static string svmModelFile = "/Users/david/Documents/HOGINRIATraining/genfiles/svmModel.dat";
-static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
+// static string featuresFile = "/Users/david/Documents/HOGINRIATraining/genfiles/features.dat";
+// static string svmModelFile = "/Users/david/Documents/HOGINRIATraining/genfiles/svmModel.dat";
+// static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
 
 static vector<string> split(const string& s, const string& delim, const bool keep_empty = true) {
   vector<string> result;
@@ -161,7 +161,7 @@ static void detectTest(const HOGDescriptor& hog, string& testImageFile, bool c, 
 int main(int argc, char** argv){
 	HOGDescriptor hog;
 	hog.winSize = Size(64,128);
-	SVMLight::SVMClassifier classifier(svmModelFile);
+	SVMLight::SVMClassifier classifier(argv[1]);
 	vector<float> descriptorVector = classifier.getDescriptorVector();
 	cout << "Getting the Descriptor Vector" << endl;
 	hog.setSVMDetector(descriptorVector);

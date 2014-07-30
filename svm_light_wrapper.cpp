@@ -13,7 +13,7 @@
  * 
  */
 
- using namespace std;
+using namespace std;
 
 namespace SVMLight 
 {
@@ -112,7 +112,10 @@ namespace SVMLight
         }
 
         // Calls the actual machine learning algorithm
-        void train() {
+        void train(const int& kernelType) {
+            //Specify the kernel we want to use for the classification task
+            kernel_parm->kernel_type = kernelType;
+
             // svm_learn_classification(docs, target, totdoc, totwords, learn_parm, kernel_parm, kernel_cache, model, NULL, create_env());
             svm_learn_classification(docs, target, totdoc, totwords, learn_parm, kernel_parm, kernel_cache, model, NULL);
             // original wrapper was using the regression:
@@ -174,13 +177,13 @@ namespace SVMLight
         featuresFile_ << endl;
     }
 
-    void SVMTrainer::trainAndSaveModel(const string& modelFileName)
+    void SVMTrainer::trainAndSaveModel(const string& modelFileName, const int& kernelType)
     {
         if (featuresFile_.is_open())
             featuresFile_.close();
 
         SVMLightImpl::getInstance()->read_problem(featuresFileName_);
-        SVMLightImpl::getInstance()->train();
+        SVMLightImpl::getInstance()->train(kernelType);
         SVMLightImpl::getInstance()->saveModelToFile(modelFileName);
     }
 
