@@ -5,7 +5,7 @@
 
 #include <opencv2/opencv.hpp>
 
-#include "svm_light_wrapper.h"
+#include "lib_svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
@@ -161,7 +161,7 @@ static void detectTest(const HOGDescriptor& hog, string& testImageFile, bool c, 
 int main(int argc, char** argv){
 	HOGDescriptor hog;
 	hog.winSize = Size(64,128);
-	SVMLight::SVMClassifier classifier(argv[1]);
+	LibSVM::SVMClassifier classifier(argv[1]);
 	vector<float> descriptorVector = classifier.getDescriptorVector();
 	cout << "Getting the Descriptor Vector" << endl;
 	hog.setSVMDetector(descriptorVector);

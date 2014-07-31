@@ -7,7 +7,7 @@
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 
-#include "svm_light_wrapper.h"
+#include "lib_svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
@@ -15,7 +15,7 @@ using namespace tinyxml2;
 
 extern "C" 
 {
-    #include "svm_common.h" 
+    #include "svm.h" 
 }
 
 //Parameter Definitions
@@ -156,7 +156,7 @@ static vector<Rect> getROI(const string& imageFilename, bool c){
   return bboxes;
 }
 
-static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, SVMLight::SVMTrainer& svm, bool c){
+static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm, bool c){
   Mat imageData = imread(imageFilename, CV_LOAD_IMAGE_GRAYSCALE);
 
   //Finding person bounding boxes inside the image
@@ -214,7 +214,7 @@ int main(int argc, char** argv){
   LOG(INFO) << "Generating the HOG features and saving it in file "<< featuresFile.c_str() << endl;
   float percent;
 
-  SVMLight::SVMTrainer svm(featuresFile.c_str());
+  LibSVM::SVMTrainer svm(featuresFile.c_str());
   //Iterate over sample images
   for(unsigned long currentFile = 0; currentFile < overallSamples; ++currentFile){
     storeCursor();

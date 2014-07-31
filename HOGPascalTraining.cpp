@@ -7,7 +7,7 @@
 
 #include <opencv2/opencv.hpp>
 
-#include "svm_light_wrapper.h"
+#include "lib_svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
@@ -15,8 +15,7 @@ using namespace tinyxml2;
 
 extern "C" 
 {
-    #include "svm_common.h" 
-    #include "svm_learn.h"
+    #include "svm.h" 
 }
 
 //Parameter Definitions
@@ -125,7 +124,7 @@ static void getSamples(const string& sampleListPath, vector<string>& posFilename
   }
 }
 
-static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, SVMLight::SVMTrainer& svm){
+static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm){
   Mat imageData = imread(imageFilename, 0);
   vector<Rect> posRegions;
   vector<Rect> negRegions;
@@ -233,7 +232,7 @@ static void detectTest(const HOGDescriptor& hog, Mat& imageData){
 static void test(){
   HOGDescriptor hog;
   hog.winSize = Size(64,128);
-  SVMLight::SVMClassifier classifier(svmModelFile);
+  LibSVM::SVMClassifier classifier(svmModelFile);
   cout << "Getting the Classifier" << endl;
   vector<float> descriptorVector = classifier.getDescriptorVector();
   cout << "Getting the Descriptor Vector" << endl;
@@ -282,7 +281,7 @@ int main(int argc, char** argv){
   cout << "Generating the HOG features and saving it in file "<< featuresFile.c_str() << endl;
   float percent;
 
-  SVMLight::SVMTrainer svm(featuresFile.c_str());
+  LibSVM::SVMTrainer svm(featuresFile.c_str());
   //Iterate over sample images
   for(unsigned long currentFile = 0; currentFile < overallSamples; ++currentFile){
     storeCursor();
@@ -306,7 +305,7 @@ int main(int argc, char** argv){
   cout << "Finished writing the features" << endl;
 
   // Starting the training of the model
-  cout << "Starting the training of the model using SVMLight" << endl;
+  cout << "Starting the training of the model using LibSVM" << endl;
   svm.trainAndSaveModel(svmModelFile,LINEAR);
   cout << "SVM Model saved to " << svmModelFile << endl;
   
