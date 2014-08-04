@@ -2,10 +2,11 @@
 #include <fstream>
 #include <dirent.h>
 #include <numeric>
+#include <glog/logging.h>
 
 #include <opencv2/opencv.hpp>
 
-#include "lib_svm_wrapper.h"
+#include "svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
@@ -40,7 +41,7 @@ static vector<string> split(const string& s, const string& delim, const bool kee
 static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
 	string posPath = listPath+"pos/";
 	string negPath = listPath+"neg/";
-	cout << "Getting positive files in: " << posPath << endl;
+	LOG(INFO) << "Getting positive files in: " << posPath;
 	struct dirent* ep;
 	DIR* dp = opendir(posPath.c_str());
 	if(dp!=NULL){
@@ -60,7 +61,7 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
 			}
 		}
 	}
-	cout << "Getting negative files in: " << negPath << endl;
+	LOG(INFO) << "Getting negative files in: " << negPath;
 	dp = opendir(negPath.c_str());
 	if(dp!=NULL){
 		int i = 0;
@@ -133,7 +134,7 @@ static void getScore(Mat& imageData, const vector<Rect>& found, string& testImag
 			annFile.close();
 		}
 		else
-			cout << "Couldn't open the annontations file: " << annPath << endl;
+			LOG(ERROR) << "Couldn't open the annontations file: " << annPath;
 	}
 	else{
 		numPositives++;
@@ -153,19 +154,24 @@ static void detectTest(const HOGDescriptor& hog, string& testImageFile, bool c, 
 	hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.01,groupThreshold);
 	getScore(imageData,found, testImageFile,c, truePositive, falsePositive, numPositives);
 
-	cout << "Number of true positives: " << truePositive << endl;
-	cout << "Number of false positives: " << falsePositive << endl;
-	cout << "---------------------------" << endl;
+	LOG(INFO) << "Number of true positives: " << truePositive;
+	LOG(INFO) << "Number of false positives: " << falsePositive;
 }
 
 int main(int argc, char** argv){
+	//Starting the logging library
+	//FLAGS_log_dir = logDir;
+	FLAGS_logtostderr = false;
+	FLAGS_stderrthreshold = 0;
+	google::InitGoogleLogging(argv[0]);
+
 	HOGDescriptor hog;
 	hog.winSize = Size(64,128);
 	LibSVM::SVMClassifier classifier(argv[1]);
 	vector<float> descriptorVector = classifier.getDescriptorVector();
-	cout << "Getting the Descriptor Vector" << endl;
+	LOG(INFO) << "Getting the Descriptor Vector";
 	hog.setSVMDetector(descriptorVector);
-	cout << "Applied the descriptor to the hog class" << endl;
+	LOG(INFO) << "Applied the descriptor to the hog class";
 	//hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
 
 	vector<string> testImagesPos;
@@ -180,7 +186,7 @@ int main(int argc, char** argv){
 	// for(int i = 0; i < testImagesPos.size(); ++i){
 	int np = 0;
 	for(int i = 0; i < testImagesPos.size(); ++i){
-		cout << "Testing image: " << testImagesPos[i] << endl;
+		LOG(INFO) << "Testing image: " << testImagesPos[i];
 		int tp = 0;
 		int fp = 0;
 		int n = 0;
@@ -190,7 +196,7 @@ int main(int argc, char** argv){
 		np += n;
 	}
 	for(int i = 0; i < testImagesNeg.size(); ++i){
-		cout << "Testing image: " << testImagesNeg[i] << endl;
+		LOG(INFO) << "Testing image: " << testImagesNeg[i];
 		int tp = 0;
 		int fp = 0;
 		int n = 0;
@@ -203,12 +209,12 @@ int main(int argc, char** argv){
 	int sumTruePositives = std::accumulate(truePositives.begin(),truePositives.end(),0);
 	int sumFalsePositives = std::accumulate(falsePositives.begin(),falsePositives.end(),0);
 
-	cout << "Tested " << truePositives.size() << " images ..." << endl;
-	cout << "Total number of positives: " << np << endl;
-	cout << "Total number of true positives: " << sumTruePositives << endl;
-	cout << "Total number of false positives: " << sumFalsePositives << endl;
-	cout << "Precision: " << (double)sumTruePositives/(sumTruePositives+sumFalsePositives) << endl;
-	cout << "Recall: " << (double)sumTruePositives/np << endl;
+	LOG(INFO) << "Tested " << truePositives.size() << " images ...";
+	LOG(INFO) << "Total number of positives: " << np;
+	LOG(INFO) << "Total number of true positives: " << sumTruePositives;
+	LOG(INFO) << "Total number of false positives: " << sumFalsePositives;
+	LOG(INFO) << "Precision: " << (double)sumTruePositives/(sumTruePositives+sumFalsePositives);
+	LOG(INFO) << "Recall: " << (double)sumTruePositives/np;
 
 }
 

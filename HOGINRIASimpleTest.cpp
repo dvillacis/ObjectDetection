@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <dirent.h>
+#include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 
-#include "lib_svm_wrapper.h"
+#include "svm_wrapper.h"
 
 using namespace cv;
 using namespace std;
@@ -12,7 +13,7 @@ static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
 static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
 	string posPath = listPath+"pos/";
 	string negPath = listPath+"neg/";
-	cout << "Getting positive files in: " << posPath << endl;
+	LOG(INFO) << "Getting positive files in: " << posPath;
 	struct dirent* ep;
 	DIR* dp = opendir(posPath.c_str());
 	if(dp!=NULL){
@@ -32,7 +33,7 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
 			}
 		}
 	}
-	cout << "Getting negative files in: " << negPath << endl;
+	LOG(INFO) << "Getting negative files in: " << negPath;
 	dp = opendir(negPath.c_str());
 	if(dp!=NULL){
 		int i = 0;
@@ -59,9 +60,9 @@ int main(int argc, char** argv){
 	hog.winSize = Size(64,128);
 	LibSVM::SVMClassifier classifier(argv[1]);
 	vector<float> descriptorVector = classifier.getDescriptorVector();
-	cout << "Getting the Descriptor Vector" << endl;
+	LOG(INFO) << "Getting the Descriptor Vector";
 	hog.setSVMDetector(descriptorVector);
-	cout << "Applied the descriptor to the hog class" << endl;
+	LOG(INFO) << "Applied the descriptor to the hog class";
 
 	vector<string> testImagesPos;
 	vector<string> testImagesNeg;
@@ -73,7 +74,7 @@ int main(int argc, char** argv){
 
 	for(int i = 0; i < 10; ++i){
 		int index = rand() % testImagesPos.size()-1;
-		cout << "Testing image: " << testImagesPos[index] << endl;
+		LOG(INFO) << "Testing image: " << testImagesPos[index] << endl;
 		Mat imageData = imread(testImagesPos[index],CV_LOAD_IMAGE_GRAYSCALE);
 		vector<Rect> found;
 		double groupThreshold = 2.0;
@@ -89,7 +90,7 @@ int main(int argc, char** argv){
 	}
 	for(int i = 0; i < 10; ++i){
 		int index = rand() % testImagesNeg.size()-1;
-		cout << "Testing image: " << testImagesNeg[index] << endl;
+		LOG(INFO) << "Testing image: " << testImagesNeg[index];
 		Mat imageData = imread(testImagesNeg[index],CV_LOAD_IMAGE_GRAYSCALE);
 		vector<Rect> found;
 		double groupThreshold = 2.0;

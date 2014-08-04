@@ -5,25 +5,30 @@
 #include <string>
 #include <fstream>
 
-#include "svm.h"
+#include <opencv2/ml/ml.hpp>
 
 using namespace std;
 
 namespace LibSVM
 {
+    class MySVM : public CvSVM{
+    public:
+        CvSVMDecisionFunc* get_decision_function(){
+            return decision_func;
+        }
+
+    };
+
     extern class SVMTrainer
     {
     private:
         fstream featuresFile_;
         string featuresFileName_;
-        char* readline(FILE *input);
-        void exit_input_error(int line_num);
     public:
         SVMTrainer(const string& featuresFileName);
         void writeFeatureVectorToFile(const vector<float>& featureVector, bool isPositive);
         void trainAndSaveModel(const string& modelFileName, const int& kernelType);
-        const char* checkParameters(const struct svm_problem *prob, const struct svm_parameter *param);
-        svm_model * trainModel(const struct svm_problem *prob, const struct svm_parameter *param);
+        void trainModel(const struct svm_problem *prob, const struct svm_parameter *param);
     };
 
     extern class SVMClassifier

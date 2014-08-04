@@ -1,30 +1,26 @@
 #include <stdio.h>
+#include <algorithm> 
 #include <iostream>
 #include <dirent.h>
 #include <fstream>
-
+#include <glog/logging.h>
 #include <tinyxml2.h>
 
 #include <opencv2/opencv.hpp>
 
-#include "lib_svm_wrapper.h"
+#include "svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
 using namespace tinyxml2;
 
-extern "C" 
-{
-    #include "svm.h" 
-}
-
 //Parameter Definitions
 static string sampleListPath = "/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/ImageSets/Main/";
 static string sampleImagesPath = "/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/JPEGImages/";
 static string annotationsPath = "/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/Annotations/";
-static string featuresFile = "/Users/david/Documents/HOGPascalTraining/genfiles/features.dat";
-static string svmModelFile = "/Users/david/Documents/HOGPascalTraining/genfiles/svmModel.dat";
-static string descriptorVectorFile = "/Users/david/Documents/HOGPascalTraining/genfiles/descriptorVector.dat";
+static string featuresFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/PASCAL/";
+static string svmModelFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/PASCAL/";
+//static string descriptorVectorFile = "/Users/david/Documents/HOGPascalTraining/genfiles/descriptorVector.dat";
 static string category;
 
 //HOG Training parameters
@@ -61,52 +57,95 @@ static vector<string> split(const string& s, const string& delim, const bool kee
   return result;
 }
 
-static void getROI(const string& filename, vector<Rect>& posRegions, vector<Rect>& negRegions){
+static void getROI(const string& filename, vector<Rect>& posRegions, vector<Rect>& negRegions, bool c){
+  if(c == true){
+    vector<string> parts = split(filename,"/");
+    string imageName = split(parts[parts.size()-1],".")[0];
+    string annPath =  annotationsPath+imageName+".xml";
+    XMLDocument doc;
+    doc.LoadFile(annPath.c_str());
 
-  vector<string> parts = split(filename,"/");
-  string imageName = split(parts[parts.size()-1],".")[0];
-  string annPath =  annotationsPath+imageName+".xml";
-  XMLDocument doc;
-  doc.LoadFile(annPath.c_str());
+    //cout << "Retrieving annotations from " << annPath << endl;
+    XMLNode* root = doc.FirstChildElement("annotation");
+    for(XMLNode* child = root->FirstChildElement(); child != 0; child = child->NextSibling()){
+      //Find the object node in the annotations
+      if(strcmp(child->Value(),"object") == 0){
+        for(XMLNode* object = child->FirstChildElement(); object != 0; object = object->NextSibling()){
+          // Check if the name correspond to the category
+          if(strcmp(object->Value(),"name")==0){
+            if(strcmp(object->ToElement()->GetText(),category.c_str())==0){
+              //Retrieving the bounding box from the annotations
+              int xmin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmin")->GetText());
+              int ymin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymin")->GetText());
+              int xmax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmax")->GetText());
+              int ymax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymax")->GetText());
 
-  //cout << "Retrieving annotations from " << annPath << endl;
-  XMLNode* root = doc.FirstChildElement("annotation");
-  for(XMLNode* child = root->FirstChildElement(); child != 0; child = child->NextSibling()){
-    //Find the object node in the annotations
-    if(strcmp(child->Value(),"object") == 0){
-      for(XMLNode* object = child->FirstChildElement(); object != 0; object = object->NextSibling()){
-        // Check if the name correspond to the category
-        if(strcmp(object->Value(),"name")==0){
-          if(strcmp(object->ToElement()->GetText(),category.c_str())==0){
-            //Retrieving the bounding box from the annotations
-            int xmin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmin")->GetText());
-            int ymin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymin")->GetText());
-            int xmax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmax")->GetText());
-            int ymax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymax")->GetText());
+              //cout << "Region found: " << xmin << " - " << ymin << " - " << xmax << " - " << ymax << endl;
 
-            //cout << "Region found: " << xmin << " - " << ymin << " - " << xmax << " - " << ymax << endl;
+              posRegions.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+            }
+            else{
+              //Retrieving the bounding box from the annotations
+              int xmin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmin")->GetText());
+              int ymin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymin")->GetText());
+              int xmax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmax")->GetText());
+              int ymax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymax")->GetText());
 
-            posRegions.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
-          }
-          else{
-            //Retrieving the bounding box from the annotations
-            int xmin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmin")->GetText());
-            int ymin = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymin")->GetText());
-            int xmax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("xmax")->GetText());
-            int ymax = atoi(object->Parent()->FirstChildElement("bndbox")->FirstChildElement("ymax")->GetText());
+              //cout << "Region found: " << xmin << " - " << ymin << " - " << xmax << " - " << ymax << endl;
 
-            //cout << "Region found: " << xmin << " - " << ymin << " - " << xmax << " - " << ymax << endl;
-
-            negRegions.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+              negRegions.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+            }
           }
         }
       }
     }
   }
+  else{
+    // Add random negative patches to the training (HARD NEGATIVES)
+    Mat im = imread(filename,0);
+    //Generate 10 random image
+    for(int i = 0; i < 10; ++i){
+      int range_x = im.cols - 64;
+      int range_y = im.rows - 128;
+
+      int x = 0;
+      int y = 0;
+      Rect r;
+      if(range_x < 0){
+        y = rand() % (im.rows-128);
+        r.x = x;
+        r.y = y;
+        r.width = im.cols;
+        r.height = 128;
+      }
+      else if(range_y < 0){
+        x = rand() % (im.cols-128);
+        r.x = x;
+        r.y = y;
+        r.width = 64;
+        r.height = im.rows;
+      }
+      else{
+        x = rand() % (im.cols-64);
+        y = rand() % (im.rows-128);
+        r.x = x;
+        r.y = y;
+        r.width = 64;
+        r.height = 128;
+      }
+      
+      negRegions.push_back(r);
+
+      // imshow("Original",im);
+      // imshow("Random Cut",im(r));
+      // waitKey(0);
+    }
+    im.release();
+  }
 }
 
 static void getSamples(const string& sampleListPath, vector<string>& posFilenames, vector<string>& negFilenames){
-  cout << "Opening list: " << sampleListPath << endl;
+  LOG(INFO) << "Opening list: " << sampleListPath;
   string separator = " ";
   fstream File;
   File.open(sampleListPath.c_str(), ios::in);
@@ -115,7 +154,7 @@ static void getSamples(const string& sampleListPath, vector<string>& posFilename
     while(getline(File,line)){
       vector<string> tokens = split(line,separator);
       //cout << sampleImagesPath+tokens[0]+".jpg" << endl;
-      if(atof(tokens[1].c_str()) != -1)
+      if(tokens[1] != "-1")
         posFilenames.push_back(sampleImagesPath+tokens[0]+".jpg");
       else
         negFilenames.push_back(sampleImagesPath+tokens[0]+".jpg");
@@ -124,136 +163,89 @@ static void getSamples(const string& sampleListPath, vector<string>& posFilename
   }
 }
 
-static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm){
+static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm, bool c){
+  cout << imageFilename << " - " << c << endl;
   Mat imageData = imread(imageFilename, 0);
+
+  cout << imageData.rows << " - " << imageData.cols << endl;
   vector<Rect> posRegions;
   vector<Rect> negRegions;
+
   //Find the bounding box (ROI) in the annotations and cut the image
-  getROI(imageFilename, posRegions, negRegions);
+  getROI(imageFilename, posRegions, negRegions, c);
+
+  LOG(INFO) << " pos size: " << posRegions.size() << " neg size: " << negRegions.size();
+
   for(int roi = 0; roi < posRegions.size(); ++roi){
-    cout << "\t\tPositive Patch Found" << endl;
+    //LOG(INFO) << "Positive Patch Found";
     vector<float> featureVector;
+
     Mat selection = imageData(posRegions[roi]);
-    cout << "\t\tPatch size: " << selection.cols << " x " << selection.rows << "\t";
     resize(selection,selection,hog.winSize);
-    cout << "\t\tAfter resize: " << selection.cols << " x " << selection.rows <<  endl;
-    //Show the training image cutted from the original image
-    // imshow(category+" positive ",selection);
-    // waitKey(0); 
 
     //Check a valid image input
     if(selection.empty()){
       featureVector.clear();
-      cout << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!" << endl;
+      LOG(ERROR) << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!";
       return;
     }
 
     //Check a valid image size
     if(selection.cols != hog.winSize.width || selection.rows != hog.winSize.height){
       featureVector.clear();
-      cout << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
+      LOG(ERROR) << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
         << "x" << selection.rows << ") do not match HOG window size (" << hog.winSize.width 
-        << "x" << hog.winSize.height << ")" << endl;
+        << "x" << hog.winSize.height << ")";
     }
 
     hog.compute(selection,featureVector,Size(8,8),Size(0,0));
-    cout << "\t\tComputed patch HOG features" << endl;
+    //LOG(INFO) << "Computed HOG features for patch";
     svm.writeFeatureVectorToFile(featureVector,true); 
     selection.release();
     featureVector.clear();
-    cout << "\t\tClean exit" << endl;
   }
   for(int roi = 0; roi < negRegions.size(); ++roi){
-    cout << "\t\tNegative Patch Found" << endl;
+    //LOG(INFO) << "Negative Patch Found";
     vector<float> featureVector;
+    //cout << negRegions[roi].tl() << " - " << negRegions[roi].br() << endl;
+    
     Mat selection = imageData(negRegions[roi]);
-    cout << "\t\t ROI: " << negRegions[roi].tl() << "-" << negRegions[roi].br() << endl;
-    cout << "\t\tPatch size: " << selection.cols << " x " << selection.rows << "\t";
     resize(selection,selection,hog.winSize);
-    cout << "\t\tAfter resize: " << selection.cols << " x " << selection.rows <<  endl;
-    //Show the training image cutted from the original image
-    // imshow(category+" positive ",selection);
-    // waitKey(0); 
 
     //Check a valid image input
     if(selection.empty()){
       featureVector.clear();
-      cout << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!" << endl;
+      LOG(ERROR) << "Error: HOG image " << imageFilename.c_str()  <<  " is empty, features calculation skipped!";
       return;
     }
 
     //Check a valid image size
     if(selection.cols != hog.winSize.width || selection.rows != hog.winSize.height){
       featureVector.clear();
-      cout << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
+      LOG(ERROR) << "Error: Image " << imageFilename.c_str() << " dimensions (" << selection.cols 
         << "x" << selection.rows << ") do not match HOG window size (" << hog.winSize.width 
-        << "x" << hog.winSize.height << ")" << endl;
+        << "x" << hog.winSize.height << ")";
     }
 
     hog.compute(selection,featureVector,Size(8,8),Size(0,0));
-    cout << "\t\tComputed patch HOG features" << endl;
+    //LOG(INFO) << "Computed patch HOG features";
     svm.writeFeatureVectorToFile(featureVector,false); 
     selection.release();
     featureVector.clear();
-    cout << "\t\tClean exit" << endl;
   }
   imageData.release();              // we don't need the original image anymore
 }
 
-static void showDetections(const vector<Rect>& found, Mat& imageData){
-  vector<Rect> found_filtered;
-  size_t i, j;
-  for (i = 0; i < found.size(); ++i) {
-    Rect r = found[i];
-    for (j = 0; j < found.size(); ++j)
-      if (j != i && (r & found[j]) == r)
-  break;
-    if (j == found.size())
-      found_filtered.push_back(r);
-  }
-  for (i = 0; i < found_filtered.size(); i++) {
-    Rect r = found_filtered[i];
-    rectangle(imageData, r.tl(), r.br(), Scalar(64, 255, 64), 3);
-  }
-
-  cout << "Instances found: " << found_filtered.size() << endl;
-} 
-
-static void detectTest(const HOGDescriptor& hog, Mat& imageData){
-  vector<Rect> found;
-  int groupThreshold = 2;
-  Size padding(Size(32,32));
-  Size winStride(Size(8,8));
-  double hitThreshold = 0.;
-  hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.05,groupThreshold);
-  showDetections(found, imageData);
-}
-
-static void test(){
-  HOGDescriptor hog;
-  hog.winSize = Size(64,128);
-  LibSVM::SVMClassifier classifier(svmModelFile);
-  cout << "Getting the Classifier" << endl;
-  vector<float> descriptorVector = classifier.getDescriptorVector();
-  cout << "Getting the Descriptor Vector" << endl;
-  hog.setSVMDetector(descriptorVector);
-  cout << "Applied the descriptor to the hog class" << endl;
-  //hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
-  vector<string> testImagesPos;
-  vector<string> testImagesNeg;
-  getSamples("/Users/david/Documents/Development/VOC2007/VOCdevkit/VOC2007/ImageSets/Main/"+category+"_val.txt",testImagesPos,testImagesNeg);
-  for(int i = 0; i < testImagesPos.size(); ++i){
-    Mat image = imread(testImagesPos[i],CV_LOAD_IMAGE_COLOR);
-    detectTest(hog,image);
-    imshow("HOG Custom Detection",image);
-    waitKey(0);
-  }
-}
-
 int main(int argc, char** argv){
+  category = argv[1];
+  
+  transform(category.begin(),category.end(),category.begin(), ::toupper);
+  //Define the folders
+  featuresFile += category + "/HOG-LINEAR_SVM/features.dat";
+  svmModelFile += category + "/HOG-LINEAR_SVM/svmModel.dat";
+
   HOGDescriptor hog;
   hog.winSize = Size(64,128);
-  category = argv[1];
   
   //Get the positive and negative training samples
   static vector<string> positiveTrainingImages;
@@ -261,6 +253,7 @@ int main(int argc, char** argv){
   static vector<string> validExtensions;
   
   //Get the images found in the list for the category
+  transform(category.begin(),category.end(),category.begin(),::tolower);
   sampleListPath = sampleListPath+category+"_train.txt";
   getSamples(sampleListPath, positiveTrainingImages, negativeTrainingImages);
 
@@ -269,7 +262,7 @@ int main(int argc, char** argv){
   
   //Make sure there are samples to train
   if(overallSamples == 0){
-    cout << "No training samples found, exiting..." << endl;
+    LOG(ERROR) << "No training samples found, exiting...";
     return -1;
   }
 
@@ -278,7 +271,7 @@ int main(int argc, char** argv){
   setlocale(LC_NUMERIC, "C");
   setlocale(LC_ALL,"POSIX");
   
-  cout << "Generating the HOG features and saving it in file "<< featuresFile.c_str() << endl;
+  LOG(INFO) << "Generating the HOG features and saving it in file "<< featuresFile.c_str();
   float percent;
 
   LibSVM::SVMTrainer svm(featuresFile.c_str());
@@ -286,31 +279,34 @@ int main(int argc, char** argv){
   for(unsigned long currentFile = 0; currentFile < overallSamples; ++currentFile){
     storeCursor();
     const string currentImageFile = currentFile < positiveTrainingImages.size() ? positiveTrainingImages.at(currentFile): negativeTrainingImages.at(currentFile-positiveTrainingImages.size());
-    
     // Output progress
     if((currentFile+1)%1 == 0 || currentFile+1 == overallSamples){
       percent = ((currentFile+1)*100)/overallSamples;
-      printf("%5lu (%3.0f%%):\t File'%s'\n",(currentFile+1),percent,currentImageFile.c_str());
+      char progressString[500];
+      sprintf(progressString,"%5lu (%3.0f%%): File'%s'\n",(currentFile+1),percent,currentImageFile.c_str());
+      LOG(INFO) << progressString;
       fflush(stdout);
       resetCursor();
     }
     
     // Calculate feature vector for the current image file
-    calculateFeaturesFromInput(currentImageFile, hog, svm);
+    bool c = false;
+    if(currentFile < positiveTrainingImages.size())
+      c = true;
+    
+    // Calculate feature vector for the current image file
+    calculateFeaturesFromInput(currentImageFile, hog, svm, c);
     
     //os.clear(); os.seekp(0);    // reset string stream
 
   }
   printf("\n");
-  cout << "Finished writing the features" << endl;
+  LOG(INFO) << "Finished writing the features";
 
   // Starting the training of the model
-  cout << "Starting the training of the model using LibSVM" << endl;
-  svm.trainAndSaveModel(svmModelFile,LINEAR);
-  cout << "SVM Model saved to " << svmModelFile << endl;
-  
-  // Test the just trained descriptor
-  test();
+  LOG(INFO) << "Starting the training of the model using LibSVM";
+  svm.trainAndSaveModel(svmModelFile,CvSVM::LINEAR);
+  LOG(INFO) << "SVM Model saved to " << svmModelFile << endl;
 
   return 0;
 }

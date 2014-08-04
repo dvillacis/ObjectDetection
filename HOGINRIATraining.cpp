@@ -6,24 +6,20 @@
 #include <tinyxml2.h>
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
+#include <opencv2/ml/ml.hpp>
 
-#include "lib_svm_wrapper.h"
+#include "svm_wrapper.h"
 
 using namespace std;
 using namespace cv;
 using namespace tinyxml2;
 
-extern "C" 
-{
-    #include "svm.h" 
-}
-
 //Parameter Definitions
 static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/Train/";
 static string trainAnnotationsPath = "/Users/david/Documents/Development/INRIAPerson/Train/annotations/";
-static string featuresFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/HOG-POLY_SVM/features.dat";
-static string svmModelFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/HOG-POLY_SVM/svmModel.dat";
-static string logDir = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/HOG-POLY_SVM/log";
+static string featuresFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
+static string svmModelFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
+static string logDir = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
 //static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
 
 //HOG Training parameters
@@ -69,9 +65,9 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
   if(dp!=NULL){
     int i = 0;
     while((ep = readdir(dp))){
-      i++;
-      if(i == 10)
-        break;
+      // i++;
+      // if(i == 10)
+      //   break;
       if(ep->d_type & DT_DIR){
         continue;
       }
@@ -88,9 +84,9 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
   if(dp!=NULL){
     int i = 0;
     while((ep = readdir(dp))){
-      i++;
-      if(i == 5)
-        break;
+      // i++;
+      // if(i == 5)
+      //   break;
       if(ep->d_type & DT_DIR){
         continue;
       }
@@ -178,6 +174,11 @@ static void calculateFeaturesFromInput(const string& imageFilename, HOGDescripto
 
 int main(int argc, char** argv){
 
+  string kernelString = "RBF";
+  featuresFile += "HOG-"+kernelString+"_SVM/features.dat";
+  svmModelFile += "HOG-"+kernelString+"_SVM/svmModel.dat";
+  logDir += "HOG-"+kernelString+"_SVM/log/";
+
   //Starting the logging library
   FLAGS_log_dir = logDir;
   FLAGS_logtostderr = false;
@@ -242,8 +243,8 @@ int main(int argc, char** argv){
   printf("\n");
   LOG(INFO) << "Finished writing the features";
   // Starting the training of the model
-  LOG(INFO) << "Starting the training of the model using SVMLight";
-  svm.trainAndSaveModel(svmModelFile,POLY);
+  LOG(INFO) << "Starting the training of the model using LibSVM";
+  svm.trainAndSaveModel(svmModelFile,CvSVM::RBF);
   LOG(WARNING) << "SVM Model saved to " << svmModelFile;
   
   return 0;
