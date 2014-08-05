@@ -9,7 +9,7 @@
 
 #include "svm_wrapper.h"
 
-#define AUTO_TRAIN_SVM
+//#define AUTO_TRAIN_SVM
 
 using namespace std;
 using namespace cv;
@@ -49,7 +49,7 @@ namespace LibSVM
                 3,            // Param (degree) for poly kernel only
                 1.0,            // Param (gamma) for poly/rbf kernel only
                 1.0,            // Param (coef0) for poly/sigmoid kernel only
-                10,             // SVM optimization param C
+                0.01,             // SVM optimization param C
                 0,              // SVM optimization param nu (not used for N class SVM)
                 0,              // SVM optimization param p (not used for N class SVM)
                 NULL,           // class weights (or priors)

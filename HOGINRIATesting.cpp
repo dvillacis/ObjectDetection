@@ -7,36 +7,13 @@
 #include <opencv2/opencv.hpp>
 
 #include "svm_wrapper.h"
+#include "INRIATestingUtils.h"
 
 using namespace std;
 using namespace cv;
 
 static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
 static string testAnnotationsPath = "/Users/david/Documents/Development/INRIAPerson/Test/annotations/";
-// static string featuresFile = "/Users/david/Documents/HOGINRIATraining/genfiles/features.dat";
-// static string svmModelFile = "/Users/david/Documents/HOGINRIATraining/genfiles/svmModel.dat";
-// static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
-
-static vector<string> split(const string& s, const string& delim, const bool keep_empty = true) {
-  vector<string> result;
-  if (delim.empty()) {
-    result.push_back(s);
-    return result;
-  }
-  string::const_iterator substart = s.begin(), subend;
-  while (true) {
-    subend = search(substart, s.end(), delim.begin(), delim.end());
-    string temp(substart, subend);
-    if (keep_empty || !temp.empty()) {
-      result.push_back(temp);
-    }
-    if (subend == s.end()) {
-      break;
-    }
-    substart = subend + delim.size();
-  }
-  return result;
-}
 
 static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
 	string posPath = listPath+"pos/";
@@ -83,79 +60,16 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
 	return;
 }
 
-static string getAnnotation(const string& imageFilename, const string& annotationsPath){
-  //Get the annotation filename
-  vector<string> parts = split(imageFilename,"/");
-  string imageName = split(parts[parts.size()-1],".")[0];
-  string annPath = annotationsPath+imageName+".txt";
-  return annPath;
-}
-
-static void getScore(Mat& imageData, const vector<Rect>& found, string& testImageFile, bool c, int& truePositive, int& falsePositive, int& numPositives){
-	//Compare the detected boxes with the ground truth
-	if(c==true){
-		string annPath = getAnnotation(testImageFile,testAnnotationsPath);
-		fstream annFile;
-		annFile.open(annPath.c_str(),ios::in);
-		if(annFile.good() && annFile.is_open()){
-			string line;
-			while(getline(annFile,line)){
-				if(line.find("Bounding box for object") != string::npos){
-					string temp = split(line," : ")[1];
-					vector<string> coords = split(temp," - ");
-					int xmin = atoi(split(coords[0],", ")[0].erase(0,1).c_str());
-					int ymin = atoi(split(coords[0],", ")[1].c_str());
-					int xmax = atoi(split(coords[1],", ")[0].erase(0,1).c_str());
-					int ymax = atoi(split(coords[1],", ")[1].c_str());
-					Rect groundTruth(xmin,ymin,xmax-xmin,ymax-ymin);
-					numPositives++;
-					//rectangle(imageData,groundTruth.tl(), groundTruth.br(), Scalar(255, 255, 255), 3);
-					for(int i = 0; i < found.size(); ++i){
-						Rect intersection = groundTruth & found[i];
-						//double sumArea = (groundTruth.width*groundTruth.height) + (found[i].width*found[i].height);
-						double sumArea = groundTruth.width*groundTruth.height;
-						double intersectionArea = intersection.width * intersection.height;
-						// cout << "Intersection Area = " << intersectionArea << endl;
-						// cout << "sumArea = " << sumArea << endl;
-						// cout << "Intersection area for found " << i << ": " << intersectionArea/sumArea << endl;
-						if((intersectionArea/sumArea) > 0.5){
-							truePositive++;
-							break;
-						}
-						else
-							falsePositive++;
-						
-						// rectangle(imageData,found[i].tl(), found[i].br(), Scalar(0, 0, 0), 3);
-						// imshow("Test image",imageData);
-						// waitKey(0);
-					}
-				}
-			}
-			annFile.close();
-		}
-		else
-			LOG(ERROR) << "Couldn't open the annontations file: " << annPath;
-	}
-	else{
-		numPositives++;
-		if(found.size() > 0)
-			falsePositive += found.size();
-	}
-} 
-
 static void detectTest(const HOGDescriptor& hog, string& testImageFile, bool c, int& truePositive, int& falsePositive, int& numPositives){
-	Mat imageData = imread(testImageFile,CV_LOAD_IMAGE_GRAYSCALE);
-	//resize(imageData,imageData,Size(200,200));
-	vector<Rect> found;
-	double groupThreshold = 2.0;
-	Size padding(Size(0,0));
-	Size winStride(Size(16,16));
-	double hitThreshold = 0.0;
-	hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.01,groupThreshold);
-	getScore(imageData,found, testImageFile,c, truePositive, falsePositive, numPositives);
+	
+	INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils(testAnnotationsPath);
 
-	LOG(INFO) << "Number of true positives: " << truePositive;
-	LOG(INFO) << "Number of false positives: " << falsePositive;
+	vector<Rect> falsePositives;
+	vector<Rect> truePositives;
+	utils->testImage(testImageFile, hog, falsePositives, truePositives,c);
+
+	LOG(INFO) << "Number of true positives: " << truePositives.size();
+	LOG(INFO) << "Number of false positives: " << falsePositives.size();
 }
 
 int main(int argc, char** argv){
@@ -189,7 +103,7 @@ int main(int argc, char** argv){
 		LOG(INFO) << "Testing image: " << testImagesPos[i];
 		int tp = 0;
 		int fp = 0;
-		int n = 0;
+		int n = 1;
 		detectTest(hog,testImagesPos[i],true, tp,fp,n);
 		truePositives.push_back(tp);
 		falsePositives.push_back(fp);
@@ -217,7 +131,3 @@ int main(int argc, char** argv){
 	LOG(INFO) << "Recall: " << (double)sumTruePositives/np;
 
 }
-
-
-
-

@@ -9,6 +9,7 @@
 #include <opencv2/ml/ml.hpp>
 
 #include "svm_wrapper.h"
+#include "INRIATestingUtils.h"
 
 using namespace std;
 using namespace cv;
@@ -143,9 +144,6 @@ static vector<Rect> getROI(const string& imageFilename, bool c){
       int y = rand() % (im.rows-128);
       Rect r(x,y,64,128);
       bboxes.push_back(r);
-
-      // imshow("Random Cut",im(r));
-      // waitKey(0);
     }
   }
   
@@ -159,22 +157,84 @@ static void calculateFeaturesFromInput(const string& imageFilename, HOGDescripto
   vector<Rect> ROI = getROI(imageFilename,c);
   for(int i = 0; i < ROI.size(); ++i){
     Mat patch = imageData(ROI[i]);
-    // imshow("Training Image (+)",patch);
-    // waitKey(0);
-
     resize(patch,patch,hog.winSize);
     vector<float> featureVector;
     hog.compute(patch,featureVector,winStride,trainingPadding);
     svm.writeFeatureVectorToFile(featureVector,c); 
+
+    //Add the reflection of the patch
+    Mat reflectedPatch;
+    flip(patch, reflectedPatch,1);
+    featureVector.clear();
+    hog.compute(reflectedPatch,featureVector,winStride,trainingPadding);
+    svm.writeFeatureVectorToFile(featureVector,c);
+
     patch.release();
     featureVector.clear();
   }
   imageData.release();
 }
 
+static void hardNegativeTraining(string& svmModelFile){
+  HOGDescriptor hnhog;
+  hnhog.winSize = Size(64,128);
+  LibSVM::SVMClassifier classifier(svmModelFile);
+  vector<float> descriptorVector = classifier.getDescriptorVector();
+  hnhog.setSVMDetector(descriptorVector);
+
+  //Get the positive and negative training samples
+  static vector<string> positiveTrainingImages;
+  static vector<string> negativeTrainingImages;
+  static vector<string> validExtensions;
+  validExtensions.push_back("jpg");
+  validExtensions.push_back("png");
+  
+  //Get the images in the training folders
+  getSamples(sampleListPath, positiveTrainingImages, negativeTrainingImages, validExtensions);
+
+  //Count the total number of samples
+  unsigned long overallSamples = positiveTrainingImages.size()+negativeTrainingImages.size();
+  
+  //Make sure there are samples to train
+  if(overallSamples == 0){
+    LOG(ERROR) << "No training samples found, exiting...";
+    return;
+  }
+
+  INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils(trainAnnotationsPath);
+
+  for(int i = 0; i < positiveTrainingImages.size(); ++i){
+    vector<Rect> falsePositives;
+    vector<Rect> truePositives;
+    utils->testImage(positiveTrainingImages[i], hnhog, falsePositives, truePositives,true);
+
+    Mat originalImage = imread(positiveTrainingImages[i],CV_LOAD_IMAGE_GRAYSCALE);
+    LOG(INFO) << "False positive found: " << falsePositives.size();
+    for(int j = 0; j < falsePositives.size(); ++j){
+      rectangle(originalImage,falsePositives[j].tl(),falsePositives[j].br(),Scalar(255,255,255),3);
+    }
+    imshow("Original", originalImage);
+    waitKey(0);
+  }
+
+  for(int i = 0; i < negativeTrainingImages.size(); ++i){
+    vector<Rect> falsePositives;
+    vector<Rect> truePositives;
+    utils->testImage(negativeTrainingImages[i], hnhog, falsePositives, truePositives,true);
+
+    Mat originalImage = imread(positiveTrainingImages[i],CV_LOAD_IMAGE_GRAYSCALE);
+    LOG(INFO) << "False positive found: " << falsePositives.size();
+    for(int j = 0; j < falsePositives.size(); ++j){
+      rectangle(originalImage,falsePositives[j].tl(),falsePositives[j].br(),Scalar(255,255,255),3);
+    }
+    imshow("Original", originalImage);
+    waitKey(0);
+  }
+}
+
 int main(int argc, char** argv){
 
-  string kernelString = "RBF";
+  string kernelString = "LINEAR";
   featuresFile += "HOG-"+kernelString+"_SVM/features.dat";
   svmModelFile += "HOG-"+kernelString+"_SVM/svmModel.dat";
   logDir += "HOG-"+kernelString+"_SVM/log/";
@@ -244,8 +304,19 @@ int main(int argc, char** argv){
   LOG(INFO) << "Finished writing the features";
   // Starting the training of the model
   LOG(INFO) << "Starting the training of the model using LibSVM";
-  svm.trainAndSaveModel(svmModelFile,CvSVM::RBF);
+  svm.trainAndSaveModel(svmModelFile,CvSVM::LINEAR);
   LOG(WARNING) << "SVM Model saved to " << svmModelFile;
+
+  //Calculate the false positive to perform a hard negative training
+  LOG(INFO) << "Detecting false positives in traning set to perform HARD NEGATIVE TRAINING";
+  hardNegativeTraining(svmModelFile);
   
   return 0;
 }
+
+
+
+
+
+
+
