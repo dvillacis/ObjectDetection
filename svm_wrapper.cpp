@@ -111,20 +111,25 @@ namespace LibSVM
                     trainingData.at<float>(i,j) = data.at(i).at(j);
                 }
             }
+
+            data.clear();
+            labels.clear();
             
         }
 
         void trainModel(const int& kernelType){
             params->kernel_type = kernelType;
-        #ifdef AUTO_TRAIN_SVM
             LOG(INFO) << "Staring training " << trainingData.rows << " examples with " << trainingData.cols << " features";
+        #ifdef AUTO_TRAIN_SVM
             LOG(INFO) << "Finding optimal parameters to use";
             svm->train_auto(trainingData,trainingClass,varIdx,sampleIdx,*params,10);
             LOG(INFO) << "The optimal parameters are: degree: " << params->degree << ", gamma: " <<
                 params->gamma << ", coef0: " << params->coef0 << ", C: " << params->C << ", nu: " <<
                 params->nu << ", p: " << params->p;
         #else
-            LOG(INFO) << "Training using default parameters";
+            LOG(INFO) << "Training using default parameter: "<< params->degree << ", gamma: " <<
+                params->gamma << ", coef0: " << params->coef0 << ", C: " << params->C << ", nu: " <<
+                params->nu << ", p: " << params->p;
             svm->train(trainingData,trainingClass,varIdx,sampleIdx,*params);
         #endif
             LOG(INFO) << "Training completed";
@@ -172,14 +177,15 @@ namespace LibSVM
 
     void SVMTrainer::trainAndSaveModel(const string& modelFileName, const int& kernelType)
     {
-        if (featuresFile_.is_open())
-            featuresFile_.close();
-
         SVMImpl::getInstance()->read_problem(featuresFileName_);
         LOG(INFO) << "Problem read successfully";
         SVMImpl::getInstance()->trainModel(kernelType);
         LOG(INFO) << "Model trained";
         SVMImpl::getInstance()->saveModelToFile(modelFileName);
+    }
+
+    void SVMTrainer::closeFeaturesFile(){
+        featuresFile_.close();
     }
 
     SVMClassifier::SVMClassifier(const string& modelFilename)

@@ -31,6 +31,8 @@ namespace INRIAUtils{
 		hog.detectMultiScale(image,found,hitThreshold,winStride,padding,1.01,groupThreshold);
 
 		get(found, imagePath, isPositive, falsePositives, truePositives);
+
+		LOG(INFO) << "Found " << found.size() << ": " << falsePositives.size() << " false positives and " << truePositives.size() << " true positives";
 	}
 
 	vector<string> INRIATestingUtils::split(const string& s, const string& delim, const bool keep_empty) {
@@ -56,7 +58,6 @@ namespace INRIAUtils{
 
 	void INRIATestingUtils::get(vector<Rect> found, string imagePath, bool isPositive, vector<Rect>& falsePositives, vector<Rect>& truePositives){
 		if(isPositive == true){
-			vector<Rect> falsePositives;
 			string annPath = getAnnotation(imagePath);
 			fstream annFile;
 			annFile.open(annPath.c_str(), ios::in);
@@ -77,9 +78,14 @@ namespace INRIAUtils{
 							double intersectionArea = intersection.width * intersection.height;
 							if((intersectionArea/sumArea) > 0.5){
 								truePositives.push_back(found[i]);
+								break;
+								//LOG(INFO) << "Found true positive";
 							}
-							else
-								falsePositives.push_back(found[i]);
+							else{
+								if(find(falsePositives.begin(),falsePositives.end(),found[i]) == falsePositives.end())
+									falsePositives.push_back(found[i]);
+								//LOG(INFO) << "Found false positive";
+							}
 						}
 					}
 				}

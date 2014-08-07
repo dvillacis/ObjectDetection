@@ -19,7 +19,7 @@ namespace LibSVM
 
     };
 
-    extern class SVMTrainer
+    class SVMTrainer
     {
     private:
         fstream featuresFile_;
@@ -29,9 +29,10 @@ namespace LibSVM
         void writeFeatureVectorToFile(const vector<float>& featureVector, bool isPositive);
         void trainAndSaveModel(const string& modelFileName, const int& kernelType);
         void trainModel(const struct svm_problem *prob, const struct svm_parameter *param);
+        void closeFeaturesFile();
     };
 
-    extern class SVMClassifier
+    class SVMClassifier
     {
     public:
         SVMClassifier(const string& featuresFileName);

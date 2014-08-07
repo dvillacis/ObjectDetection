@@ -56,6 +56,12 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
 }
 
 int main(int argc, char** argv){
+
+	//Starting the logging library
+	FLAGS_logtostderr = true;
+	FLAGS_stderrthreshold = 0;
+	google::InitGoogleLogging(argv[0]);
+
 	HOGDescriptor hog;
 	hog.winSize = Size(64,128);
 	LibSVM::SVMClassifier classifier(argv[1]);
@@ -72,7 +78,7 @@ int main(int argc, char** argv){
 
 	getSamples(testPath, testImagesPos, testImagesNeg, validExtensions);
 
-	for(int i = 0; i < 10; ++i){
+	for(int i = 0; i < 20; ++i){
 		int index = rand() % testImagesPos.size()-1;
 		LOG(INFO) << "Testing image: " << testImagesPos[index] << endl;
 		Mat imageData = imread(testImagesPos[index],CV_LOAD_IMAGE_GRAYSCALE);
@@ -88,7 +94,7 @@ int main(int argc, char** argv){
 		imshow("Custom Detection",imageData);
 		waitKey(0);
 	}
-	for(int i = 0; i < 10; ++i){
+	for(int i = 0; i < 20; ++i){
 		int index = rand() % testImagesNeg.size()-1;
 		LOG(INFO) << "Testing image: " << testImagesNeg[index];
 		Mat imageData = imread(testImagesNeg[index],CV_LOAD_IMAGE_GRAYSCALE);
