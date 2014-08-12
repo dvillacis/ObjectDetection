@@ -8,12 +8,16 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/ml/ml.hpp>
 
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+
 #include "svm_wrapper.h"
 #include "INRIATestingUtils.h"
 
 using namespace std;
 using namespace cv;
 using namespace tinyxml2;
+using namespace boost;
 
 //Parameter Definitions
 static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/Train/";
@@ -27,6 +31,9 @@ static string logDir = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
 static const Size trainingPadding = Size(0,0);
 static const Size winStride = Size(8,8);
 
+//Utilities
+static INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils();
+
 // Helper Functions
 static void storeCursor(){
   printf("\033[s");
@@ -36,125 +43,33 @@ static void resetCursor(){
   printf("\033[u");
 }
 
-static vector<string> split(const string& s, const string& delim, const bool keep_empty = true) {
-  vector<string> result;
-  if (delim.empty()) {
-    result.push_back(s);
-    return result;
-  }
-  string::const_iterator substart = s.begin(), subend;
-  while (true) {
-    subend = search(substart, s.end(), delim.begin(), delim.end());
-    string temp(substart, subend);
-    if (keep_empty || !temp.empty()) {
-      result.push_back(temp);
-    }
-    if (subend == s.end()) {
-      break;
-    }
-    substart = subend + delim.size();
-  }
-  return result;
-}
-
-static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
-  string posPath = listPath+"pos/";
-  string negPath = listPath+"neg/";
-  LOG(INFO) << "Getting positive files in: " << posPath;
-  struct dirent* ep;
-  DIR* dp = opendir(posPath.c_str());
-  if(dp!=NULL){
-    int i = 0;
-    while((ep = readdir(dp))){
-      i++;
-      if(i == 100)
-        break;
-      if(ep->d_type & DT_DIR){
-        continue;
-      }
-      size_t extensionLocation = string(ep->d_name).find_last_of(".");
-      string tempExt = string(ep->d_name).substr(extensionLocation+1);
-      if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
-        posFilenames.push_back((string)posPath + ep->d_name);
-        //cout << "Adding " << (string)posPath + ep->d_name << " to the positive training samples" << endl;
-      }
-    }
-  }
-  LOG(INFO) << "Getting negative files in: " << negPath;
-  dp = opendir(negPath.c_str());
-  if(dp!=NULL){
-    int i = 0;
-    while((ep = readdir(dp))){
-      i++;
-      if(i == 100)
-        break;
-      if(ep->d_type & DT_DIR){
-        continue;
-      }
-      size_t extensionLocation = string(ep->d_name).find_last_of(".");
-      string tempExt = string(ep->d_name).substr(extensionLocation+1);
-      if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
-        negFilenames.push_back((string)negPath + ep->d_name);
-        //cout << "Adding " << (string)negPath + ep->d_name << " to the negative training samples" << endl;
-      }
-    }
-  }
-  return;
-}
-
-static string getAnnotation(const string& imageFilename, const string& annotationsPath){
-  //Get the annotation filename
-  vector<string> parts = split(imageFilename,"/");
-  string imageName = split(parts[parts.size()-1],".")[0];
-  string annPath = annotationsPath+imageName+".txt";
-  return annPath;
-}
-
-static vector<Rect> getROI(const string& imageFilename, bool c){
-  vector<Rect> bboxes;
-  if(c == true){
-    string annPath = getAnnotation(imageFilename,trainAnnotationsPath);
-
-    fstream annFile;
-    annFile.open(annPath.c_str(),ios::in);
-    if(annFile.good() && annFile.is_open()){
-      string line;
-      while(getline(annFile,line)){
-        if(line.find("Bounding box for object") != string::npos){
-          string temp = split(line," : ")[1];
-          vector<string> coords = split(temp," - ");
-          int xmin = atoi(split(coords[0],", ")[0].erase(0,1).c_str());
-          int ymin = atoi(split(coords[0],", ")[1].c_str());
-          int xmax = atoi(split(coords[1],", ")[0].erase(0,1).c_str());
-          int ymax = atoi(split(coords[1],", ")[1].c_str());
-          bboxes.push_back(Rect(xmin,ymin,xmax-xmin,ymax-ymin));
+static void getSamples(string listPath, vector<string>& filenames, const vector<string>& validExtensions){
+  LOG(INFO) << "Getting files in: " << listPath;
+  filesystem::path p = listPath;
+  try{
+    if(filesystem::exists(p) && filesystem::is_directory(p)){
+      filesystem::directory_iterator end_iter;
+      int i = 0;
+      for(filesystem::directory_iterator dir_iter(p); dir_iter != end_iter; ++dir_iter){
+        filesystem::path imPath = *dir_iter;
+        if(find(validExtensions.begin(), validExtensions.end(), imPath.extension().string()) != validExtensions.end() && i < 10){
+          filenames.push_back(imPath.string());
+          //i++;
         }
       }
-      annFile.close();
-    }
-    else
-      LOG(ERROR) << "Couldnt open annotations file for: " << annPath << endl;
+    } 
   }
-  else
-  {
-    Mat im = imread(imageFilename,0);
-      //Generate 10 random images
-      for(int i = 0; i < 10; ++i){
-      int x = rand() % (im.cols-64);
-      int y = rand() % (im.rows-128);
-      Rect r(x,y,64,128);
-      bboxes.push_back(r);
-    }
+  catch (const filesystem::filesystem_error& ex){
+    LOG(ERROR) << ex.what();
   }
-  
-  return bboxes;
 }
 
 static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm, bool c){
-  Mat imageData = imread(imageFilename, CV_LOAD_IMAGE_GRAYSCALE);
+  Mat imageData = imread(imageFilename, CV_LOAD_IMAGE_COLOR);
 
   //Finding person bounding boxes inside the image
-  vector<Rect> ROI = getROI(imageFilename,c);
+  utils->setAnnotationsPath(trainAnnotationsPath);
+  vector<Rect> ROI = utils->getROI(imageFilename,c);
   for(int i = 0; i < ROI.size(); ++i){
     Mat patch = imageData(ROI[i]);
     resize(patch,patch,hog.winSize);
@@ -170,6 +85,7 @@ static void calculateFeaturesFromInput(const string& imageFilename, HOGDescripto
     svm.writeFeatureVectorToFile(featureVector,c);
 
     patch.release();
+    reflectedPatch.release();
     featureVector.clear();
   }
   imageData.release();
@@ -181,14 +97,16 @@ static void hardNegativeTraining(string& svmModelFile, HOGDescriptor& hog, LibSV
   hog.setSVMDetector(descriptorVector);
 
   //Get the positive and negative training samples
-  static vector<string> positiveTrainingImages;
-  static vector<string> negativeTrainingImages;
-  static vector<string> validExtensions;
-  validExtensions.push_back("jpg");
-  validExtensions.push_back("png");
+  vector<string> positiveTrainingImages;
+  vector<string> negativeTrainingImages;
+  vector<string> validExtensions;
+  validExtensions.push_back(".jpg");
+  validExtensions.push_back(".png");
   
-  //Get the images in the training folders
-  getSamples(sampleListPath, positiveTrainingImages, negativeTrainingImages, validExtensions);
+  //Get the positive images in the training folders
+  getSamples(sampleListPath+"pos/", positiveTrainingImages, validExtensions);
+  //Get the negavive images in the training folders
+  getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
 
   //Count the total number of samples
   unsigned long overallSamples = positiveTrainingImages.size()+negativeTrainingImages.size();
@@ -199,20 +117,24 @@ static void hardNegativeTraining(string& svmModelFile, HOGDescriptor& hog, LibSV
     return;
   }
 
-  INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils(trainAnnotationsPath);
-
   for(int i = 0; i < negativeTrainingImages.size(); ++i){
+    vector<Rect> found;
     vector<Rect> falsePositives;
     vector<Rect> truePositives;
-    utils->testImage(negativeTrainingImages[i], hog, falsePositives, truePositives,false);
+    utils->setAnnotationsPath(trainAnnotationsPath);
+    utils->testImage(negativeTrainingImages[i], hog, found, falsePositives, truePositives,false);
 
-    Mat originalImage = imread(negativeTrainingImages[i],CV_LOAD_IMAGE_GRAYSCALE);
+    Mat originalImage = imread(negativeTrainingImages[i],CV_LOAD_IMAGE_COLOR);
+
     for(int j = 0; j < falsePositives.size(); ++j){
       vector<float> featureVector;
-      //LOG(INFO) << "Original size: " << originalImage.rows << " - " << originalImage.cols << " frame: " << falsePositives[j].tl() << " - " << falsePositives[j].br();
-      Mat patch = originalImage(falsePositives[j]);
-
-      // imshow("False Positive", patch);
+      
+      Rect originalRect(0,0,originalImage.cols,originalImage.rows);
+      Rect intersection = originalRect & falsePositives[j];
+      Mat patch = originalImage(intersection);
+      // LOG(INFO) << "Original size: " << originalImage.rows << " - " << originalImage.cols << " frame: " << intersection.tl() << " - " << intersection.br();
+      // rectangle(originalImage,intersection.tl(),intersection.br(),Scalar(0,0,255),2);
+      // imshow("False Positive", originalImage);
       // waitKey(0);
 
       resize(patch,patch,Size(64,128));
@@ -242,14 +164,16 @@ int main(int argc, char** argv){
   hog.winSize = Size(64,128);
   
   //Get the positive and negative training samples
-  static vector<string> positiveTrainingImages;
-  static vector<string> negativeTrainingImages;
-  static vector<string> validExtensions;
-  validExtensions.push_back("jpg");
-  validExtensions.push_back("png");
+  vector<string> positiveTrainingImages;
+  vector<string> negativeTrainingImages;
+  vector<string> validExtensions;
+  validExtensions.push_back(".jpg");
+  validExtensions.push_back(".png");
   
-  //Get the images in the training folders
-  getSamples(sampleListPath, positiveTrainingImages, negativeTrainingImages, validExtensions);
+  //Get the positive images in the training folders
+  getSamples(sampleListPath+"pos/", positiveTrainingImages, validExtensions);
+  //Get the negavive images in the training folders
+  getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
 
   //Count the total number of samples
   unsigned long overallSamples = positiveTrainingImages.size()+negativeTrainingImages.size();
@@ -297,7 +221,22 @@ int main(int argc, char** argv){
   LOG(INFO) << "Finished writing the features";
   // Starting the training of the model
   LOG(INFO) << "Starting the training of the model using LibSVM";
-  svm.trainAndSaveModel(svmModelFile,CvSVM::SIGMOID);
+
+  // Defining the parameters for the SVM
+  CvSVMParams* myParams = new CvSVMParams(
+    CvSVM::C_SVC,   // Type of SVM; using N classes here
+    CvSVM::SIGMOID,  // Kernel type
+    3,              // Param (degree) for poly kernel only
+    1.0,            // Param (gamma) for poly/rbf kernel only
+    1.0,            // Param (coef0) for poly/sigmoid kernel only
+    0.01,           // SVM optimization param C
+    0,              // SVM optimization param nu (not used for N class SVM)
+    0,              // SVM optimization param p (not used for N class SVM)
+    NULL,           // class weights (or priors)
+    cvTermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 1000, 0.000001)
+  );
+
+  svm.trainAndSaveModel(svmModelFile,myParams);
   LOG(WARNING) << "SVM Model saved to " << svmModelFile;
 
   //Calculate the false positive to perform a hard negative training
@@ -309,7 +248,7 @@ int main(int argc, char** argv){
   LOG(INFO) << "Finished writing the hard negative features";
   // Starting the training of the model
   LOG(INFO) << "Starting the re - training of the model using LibSVM";
-  svm.trainAndSaveModel(svmModelFile,CvSVM::SIGMOID);
+  svm.trainAndSaveModel(svmModelFile,myParams);
   LOG(WARNING) << "SVM Model saved to " << svmModelFile;
   
   return 0;

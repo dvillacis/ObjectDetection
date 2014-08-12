@@ -305,7 +305,22 @@ int main(int argc, char** argv){
 
   // Starting the training of the model
   LOG(INFO) << "Starting the training of the model using LibSVM";
-  svm.trainAndSaveModel(svmModelFile,CvSVM::LINEAR);
+
+  // Defining the parameters for the SVM
+  CvSVMParams* myParams = new CvSVMParams(
+    CvSVM::C_SVC,   // Type of SVM; using N classes here
+    CvSVM::LINEAR,  // Kernel type
+    3,              // Param (degree) for poly kernel only
+    1.0,            // Param (gamma) for poly/rbf kernel only
+    1.0,            // Param (coef0) for poly/sigmoid kernel only
+    0.01,           // SVM optimization param C
+    0,              // SVM optimization param nu (not used for N class SVM)
+    0,              // SVM optimization param p (not used for N class SVM)
+    NULL,           // class weights (or priors)
+    cvTermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 1000, 0.000001)
+  );
+
+  svm.trainAndSaveModel(svmModelFile,myParams);
   LOG(INFO) << "SVM Model saved to " << svmModelFile << endl;
 
   return 0;

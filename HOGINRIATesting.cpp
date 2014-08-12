@@ -62,11 +62,13 @@ static void getSamples(string& listPath, vector<string>& posFilenames, vector<st
 
 static void detectTest(const HOGDescriptor& hog, string& testImageFile, bool c, int& truePositive, int& falsePositive, int& numPositives){
 	
-	INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils(testAnnotationsPath);
+	INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils();
+	utils->setAnnotationsPath(testAnnotationsPath);
 
+	vector<Rect> found;
 	vector<Rect> falsePositives;
 	vector<Rect> truePositives;
-	utils->testImage(testImageFile, hog, falsePositives, truePositives,c);
+	utils->testImage(testImageFile, hog, found, falsePositives, truePositives,c);
 
 	LOG(INFO) << "Number of true positives: " << truePositives.size();
 	LOG(INFO) << "Number of false positives: " << falsePositives.size();

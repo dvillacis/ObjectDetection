@@ -27,8 +27,7 @@ namespace LibSVM
     public:
         SVMTrainer(const string& featuresFileName);
         void writeFeatureVectorToFile(const vector<float>& featureVector, bool isPositive);
-        void trainAndSaveModel(const string& modelFileName, const int& kernelType);
-        void trainModel(const struct svm_problem *prob, const struct svm_parameter *param);
+        void trainAndSaveModel(const string& modelFileName, const CvSVMParams* myParams);
         void closeFeaturesFile();
     };
 

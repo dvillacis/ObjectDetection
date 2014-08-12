@@ -1,22 +1,27 @@
 #include <stdio.h>
 #include <opencv2/opencv.hpp>
+#include <boost/filesystem.hpp>
 
 using namespace cv;
 using namespace std;
+using namespace boost;
 
 namespace INRIAUtils
 {
 	class INRIATestingUtils{
 	public:
-		INRIATestingUtils(string annPath);
+		INRIATestingUtils();
 		virtual ~INRIATestingUtils();
 
-		void testImage(string& imagePath, const HOGDescriptor& hog, vector<Rect>& falsePositives, vector<Rect>& truePositives, bool isPositive);
+		void setAnnotationsPath(const string annPath);
+		string getAnnotationsPath();
+		void testImage(string& imagePath, const HOGDescriptor& hog, vector<Rect>& found, vector<Rect>& falsePositives, vector<Rect>& truePositives, bool isPositive);
+		vector<Rect> getROI(const string& imageFilename, bool c);
 
 	private:
-
-		void get(vector<Rect> found, string imagePath, bool isPositive, vector<Rect>& falsePositives, vector<Rect>& truePositives);
 		string getAnnotation(const string imagePath);
-		vector<string> split(const string& s, const string& delim, const bool keep_empty = true);
+		void get(vector<Rect> found, string imagePath, bool isPositive, vector<Rect>& falsePositives, vector<Rect>& truePositives);
+		bool validatePath(string path);
+		
 	};
 }

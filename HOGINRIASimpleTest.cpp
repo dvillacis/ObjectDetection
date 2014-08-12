@@ -3,59 +3,42 @@
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 
+#include <boost/filesystem.hpp>
+
+#include "INRIATestingUtils.h"
+
 #include "svm_wrapper.h"
 
 using namespace cv;
 using namespace std;
+using namespace boost;
 
 static string testPath = "/Users/david/Documents/Development/INRIAPerson/Test/";
+static string annPath = "/Users/david/Documents/Development/INRIAPerson/Test/annotations/";
 
-static void getSamples(string& listPath, vector<string>& posFilenames, vector<string>& negFilenames, const vector<string>& validExtensions){
-	string posPath = listPath+"pos/";
-	string negPath = listPath+"neg/";
-	LOG(INFO) << "Getting positive files in: " << posPath;
-	struct dirent* ep;
-	DIR* dp = opendir(posPath.c_str());
-	if(dp!=NULL){
-		int i = 0;
-		while((ep = readdir(dp))){
-			// i++;
-			// if(i == 100)
-			//   break;
-			if(ep->d_type & DT_DIR){
-				continue;
-			}
-			size_t extensionLocation = string(ep->d_name).find_last_of(".");
-			string tempExt = string(ep->d_name).substr(extensionLocation+1);
-			if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
-				posFilenames.push_back((string)posPath + ep->d_name);
-				//cout << "Adding " << (string)posPath + ep->d_name << " to the positive training samples" << endl;
-			}
-		}
-	}
-	LOG(INFO) << "Getting negative files in: " << negPath;
-	dp = opendir(negPath.c_str());
-	if(dp!=NULL){
-		int i = 0;
-		while((ep = readdir(dp))){
-			// i++;
-			// if(i == 80)
-			//   break;
-			if(ep->d_type & DT_DIR){
-				continue;
-			}
-			size_t extensionLocation = string(ep->d_name).find_last_of(".");
-			string tempExt = string(ep->d_name).substr(extensionLocation+1);
-			if(find(validExtensions.begin(),validExtensions.end(), tempExt)!= validExtensions.end()){
-				negFilenames.push_back((string)negPath + ep->d_name);
-				//cout << "Adding " << (string)negPath + ep->d_name << " to the negative training samples" << endl;
-			}
-		}
-	}
-	return;
+static void getSamples(string listPath, vector<string>& filenames, const vector<string>& validExtensions){
+  LOG(INFO) << "Getting files in: " << listPath;
+  filesystem::path p = listPath;
+  try{
+    if(filesystem::exists(p) && filesystem::is_directory(p)){
+      filesystem::directory_iterator end_iter;
+      for(filesystem::directory_iterator dir_iter(p); dir_iter != end_iter; ++dir_iter){
+        filesystem::path imPath = *dir_iter;
+        if(find(validExtensions.begin(), validExtensions.end(), imPath.extension().string()) != validExtensions.end()){
+          filenames.push_back(imPath.string());
+        }
+      }
+    } 
+  }
+  catch (const filesystem::filesystem_error& ex){
+    LOG(ERROR) << ex.what();
+  }
 }
 
 int main(int argc, char** argv){
+
+	INRIAUtils::INRIATestingUtils* utils = new INRIAUtils::INRIATestingUtils();
+	utils->setAnnotationsPath(annPath);
 
 	//Starting the logging library
 	FLAGS_logtostderr = true;
@@ -73,39 +56,37 @@ int main(int argc, char** argv){
 	vector<string> testImagesPos;
 	vector<string> testImagesNeg;
 	static vector<string> validExtensions;
-	validExtensions.push_back("jpg");
-	validExtensions.push_back("png");
+	validExtensions.push_back(".jpg");
+	validExtensions.push_back(".png");
 
-	getSamples(testPath, testImagesPos, testImagesNeg, validExtensions);
+	//Getting positive testing samples
+	getSamples(testPath+"pos/", testImagesPos, validExtensions);
+	//Getting negative testing samples
+	getSamples(testPath+"neg/", testImagesNeg, validExtensions);
 
-	for(int i = 0; i < 20; ++i){
+	for(int i = 0; i < 30; ++i){
 		int index = rand() % testImagesPos.size()-1;
-		LOG(INFO) << "Testing image: " << testImagesPos[index] << endl;
-		Mat imageData = imread(testImagesPos[index],CV_LOAD_IMAGE_GRAYSCALE);
+		Mat imageData = imread(testImagesPos[index],CV_LOAD_IMAGE_COLOR);
 		vector<Rect> found;
-		double groupThreshold = 2.0;
-		Size padding(Size(0,0));
-		Size winStride(Size(32,32));
-		double hitThreshold = 0.2;
-		hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.01,groupThreshold);
-		for(int j = 0; j < found.size(); j++){
-			rectangle(imageData,found[j].tl(),found[j].br(),Scalar(255,255,255),3);
+	    vector<Rect> falsePositives;
+    	vector<Rect> truePositives;
+		utils->testImage(testImagesPos[index], hog, found, falsePositives, truePositives, true);
+
+		for(int j = 0; j < truePositives.size(); j++){
+			rectangle(imageData,truePositives[j].tl(),truePositives[j].br(),Scalar(255,0,0),2);
 		}
 		imshow("Custom Detection",imageData);
 		waitKey(0);
 	}
-	for(int i = 0; i < 20; ++i){
+	for(int i = 0; i < 30; ++i){
 		int index = rand() % testImagesNeg.size()-1;
-		LOG(INFO) << "Testing image: " << testImagesNeg[index];
-		Mat imageData = imread(testImagesNeg[index],CV_LOAD_IMAGE_GRAYSCALE);
+		Mat imageData = imread(testImagesNeg[index],CV_LOAD_IMAGE_COLOR);
 		vector<Rect> found;
-		double groupThreshold = 2.0;
-		Size padding(Size(0,0));
-		Size winStride(Size(32,32));
-		double hitThreshold = 0.0;
-		hog.detectMultiScale(imageData,found, hitThreshold,winStride,padding,1.01,groupThreshold);
+		vector<Rect> falsePositives;
+    	vector<Rect> truePositives;
+		utils->testImage(testImagesNeg[index], hog, found, falsePositives, truePositives, false);
 		for(int j = 0; j < found.size(); j++){
-			rectangle(imageData,found[j].tl(),found[j].br(),Scalar(255,255,255),3);
+			rectangle(imageData,found[j].tl(),found[j].br(),Scalar(0,0,255),2);
 		}
 		imshow("Custom Detection",imageData);
 		waitKey(0);
