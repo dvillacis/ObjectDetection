@@ -52,6 +52,7 @@ int main(int argc, char** argv){
 	LOG(INFO) << "Getting the Descriptor Vector";
 	hog.setSVMDetector(descriptorVector);
 	LOG(INFO) << "Applied the descriptor to the hog class";
+	//hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
 
 	vector<string> testImagesPos;
 	vector<string> testImagesNeg;
@@ -68,27 +69,17 @@ int main(int argc, char** argv){
 		int index = rand() % testImagesPos.size()-1;
 		Mat imageData = imread(testImagesPos[index],CV_LOAD_IMAGE_COLOR);
 		vector<Rect> found;
-	    vector<Rect> falsePositives;
-    	vector<Rect> truePositives;
-		utils->testImage(testImagesPos[index], hog, found, falsePositives, truePositives, true);
-
-		for(int j = 0; j < truePositives.size(); j++){
-			rectangle(imageData,truePositives[j].tl(),truePositives[j].br(),Scalar(255,0,0),2);
-		}
-		imshow("Custom Detection",imageData);
-		waitKey(0);
+		vector<Rect> groundTruth;
+		utils->getDetections(testImagesPos[index], hog, found, true);
+		utils->getGroundTruth(testImagesPos[index], groundTruth);
+		utils->showImage(testImagesPos[index], groundTruth, found);
 	}
 	for(int i = 0; i < 30; ++i){
 		int index = rand() % testImagesNeg.size()-1;
 		Mat imageData = imread(testImagesNeg[index],CV_LOAD_IMAGE_COLOR);
 		vector<Rect> found;
-		vector<Rect> falsePositives;
-    	vector<Rect> truePositives;
-		utils->testImage(testImagesNeg[index], hog, found, falsePositives, truePositives, false);
-		for(int j = 0; j < found.size(); j++){
-			rectangle(imageData,found[j].tl(),found[j].br(),Scalar(0,0,255),2);
-		}
-		imshow("Custom Detection",imageData);
-		waitKey(0);
+		vector<Rect> groundTruth;
+		utils->getDetections(testImagesNeg[index], hog, found, false);
+		utils->showImage(testImagesNeg[index], groundTruth, found);
 	}
 }

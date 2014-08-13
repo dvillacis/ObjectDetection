@@ -28,9 +28,8 @@ namespace INRIAUtils{
 		return annotationsPath;
 	}
 
-	void INRIATestingUtils::testImage(string& imagePath, const HOGDescriptor& hog, vector<Rect>& found_filtered, vector<Rect>& falsePositives, vector<Rect>& truePositives, bool isPositive){
-		LOG(INFO) << "Testing image: " << imagePath;
-
+	void INRIATestingUtils::getDetections(string imagePath, const HOGDescriptor& hog, vector<Rect>& found_filtered, bool isPositive){
+		LOG(INFO) << "Obtaining detections for: " << imagePath;
 		Mat image = imread(imagePath, CV_LOAD_IMAGE_COLOR);
 		double groupThreshold = 2.0;
 		Size padding(Size(32,32));
@@ -51,39 +50,67 @@ namespace INRIAUtils{
             if( j == found.size() )
                 found_filtered.push_back(r);
         }
-
-		get(found_filtered, imagePath, isPositive, falsePositives, truePositives);
-
-		LOG(INFO) << "Found " << found_filtered.size() << ": " << falsePositives.size() << " false positives and " << truePositives.size() << " true positives";
 	}
 
-	void INRIATestingUtils::get(vector<Rect> found, string imagePath, bool isPositive, vector<Rect>& falsePositives, vector<Rect>& truePositives){
-		if(isPositive == true){
-			string annPath = getAnnotation(imagePath);
-			fstream annFile;
-			annFile.open(annPath.c_str(), ios::in);
-			if(annFile.good() && annFile.is_open()){
-				string line;
-				while(getline(annFile,line)){
-					if(line.find("Bounding box for object") != string::npos){
-						vector<string> temp;
-						split(temp,line,is_any_of(" :-(),"),token_compress_on);
-						int xmin = atoi(temp[10].c_str());
-						int ymin = atoi(temp[11].c_str());
-						int xmax = atoi(temp[12].c_str());
-						int ymax = atoi(temp[13].c_str());
-						Rect groundTruth(xmin,ymin,xmax-xmin,ymax-ymin);
-						truePositives.push_back(groundTruth);
+	void INRIATestingUtils::getGroundTruth(string imagePath, vector<Rect>& groundTruth){
+		LOG(INFO) << "Obtaining ground truth for: " << imagePath;
+		string annPath = getAnnotation(imagePath);
+		fstream annFile;
+		annFile.open(annPath.c_str(), ios::in);
+		if(annFile.good() && annFile.is_open()){
+			string line;
+			while(getline(annFile,line)){
+				if(line.find("Bounding box for object") != string::npos){
+					vector<string> temp;
+					split(temp,line,is_any_of(" :-(),"),token_compress_on);
+					int xmin = atoi(temp[10].c_str());
+					int ymin = atoi(temp[11].c_str());
+					int xmax = atoi(temp[12].c_str());
+					int ymax = atoi(temp[13].c_str());
+					Rect gt(xmin,ymin,xmax-xmin,ymax-ymin);
+					groundTruth.push_back(gt);
+				}
+			}
+			annFile.close();
+		}
+		else
+			LOG(ERROR) << "Couldn't open the annotations file: " << annPath;
+	}
+
+	// void INRIATestingUtils::classifyDetections(vector<Rect> found, vector<Rect> groundTruth, vector<Rect> falsePositives, vector<Rect> truePositives){
+
+	// }
+
+	float INRIATestingUtils::getOverlapArea(Rect detection, Rect groundTruth){
+		Rect intersection = detection & groundTruth;
+		float intersectionArea = intersection.area();
+		if(intersectionArea > 0.0){
+			float unionArea = detection.area() + groundTruth.area() - intersectionArea;
+			return (intersectionArea/unionArea)*100;
+		}
+		else
+			return 0.0;
+	}
+
+
+	void INRIATestingUtils::getSamples(string listPath, vector<string>& filenames, const vector<string>& validExtensions){
+		LOG(INFO) << "Getting files in: " << listPath;
+		filesystem::path p = listPath;
+		try{
+			if(filesystem::exists(p) && filesystem::is_directory(p)){
+				filesystem::directory_iterator end_iter;
+				int i = 0;
+				for(filesystem::directory_iterator dir_iter(p); dir_iter != end_iter; ++dir_iter){
+					filesystem::path imPath = *dir_iter;
+					if(find(validExtensions.begin(), validExtensions.end(), imPath.extension().string()) != validExtensions.end() && i < 5){
+						filenames.push_back(imPath.string());
+						//i++;
 					}
 				}
-				annFile.close();
-			}
-			else
-				LOG(ERROR) << "Couldn't open the annotations file: " << annPath;
+			} 
 		}
-		else{
-			for(int i = 0; i < found.size(); ++i)
-				falsePositives.push_back(found[i]);	
+		catch (const filesystem::filesystem_error& ex){
+			LOG(ERROR) << ex.what();
 		}
 	}
 
@@ -124,6 +151,16 @@ namespace INRIAUtils{
 		}
 
 		return bboxes;
+	}
+
+	void INRIATestingUtils::showImage(string imagePath, vector<Rect> groundTruth, vector<Rect> found){
+		Mat image = imread(imagePath,CV_LOAD_IMAGE_COLOR);
+		for(int i = 0; i < groundTruth.size(); ++i)
+			rectangle(image,groundTruth[i].tl(),groundTruth[i].br(),Scalar(0,0,255),2);
+		for(int j = 0; j < found.size(); ++j)
+			rectangle(image,found[j].tl(),found[j].br(),Scalar(255,0,0),2);
+		imshow("Custom Detection",image);
+		waitKey(0);
 	}
 
 	string INRIATestingUtils::getAnnotation(const string imagePath){

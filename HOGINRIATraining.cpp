@@ -24,7 +24,7 @@ static string sampleListPath = "/Users/david/Documents/Development/INRIAPerson/T
 static string trainAnnotationsPath = "/Users/david/Documents/Development/INRIAPerson/Train/annotations/";
 static string featuresFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
 static string svmModelFile = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
-static string logDir = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
+//static string logDir = "/Volumes/EXTERNAL/DISSERTATION/MODELS/INRIA/";
 //static string descriptorVectorFile = "/Users/david/Documents/HOGINRIATraining/genfiles/descriptorVector.dat";
 
 //HOG Training parameters
@@ -41,27 +41,6 @@ static void storeCursor(){
 
 static void resetCursor(){
   printf("\033[u");
-}
-
-static void getSamples(string listPath, vector<string>& filenames, const vector<string>& validExtensions){
-  LOG(INFO) << "Getting files in: " << listPath;
-  filesystem::path p = listPath;
-  try{
-    if(filesystem::exists(p) && filesystem::is_directory(p)){
-      filesystem::directory_iterator end_iter;
-      int i = 0;
-      for(filesystem::directory_iterator dir_iter(p); dir_iter != end_iter; ++dir_iter){
-        filesystem::path imPath = *dir_iter;
-        if(find(validExtensions.begin(), validExtensions.end(), imPath.extension().string()) != validExtensions.end() && i < 10){
-          filenames.push_back(imPath.string());
-          //i++;
-        }
-      }
-    } 
-  }
-  catch (const filesystem::filesystem_error& ex){
-    LOG(ERROR) << ex.what();
-  }
 }
 
 static void calculateFeaturesFromInput(const string& imageFilename, HOGDescriptor& hog, LibSVM::SVMTrainer& svm, bool c){
@@ -103,39 +82,29 @@ static void hardNegativeTraining(string& svmModelFile, HOGDescriptor& hog, LibSV
   validExtensions.push_back(".jpg");
   validExtensions.push_back(".png");
   
-  //Get the positive images in the training folders
-  getSamples(sampleListPath+"pos/", positiveTrainingImages, validExtensions);
   //Get the negavive images in the training folders
-  getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
-
-  //Count the total number of samples
-  unsigned long overallSamples = positiveTrainingImages.size()+negativeTrainingImages.size();
+  utils->setAnnotationsPath(trainAnnotationsPath);
+  utils->getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
   
   //Make sure there are samples to train
-  if(overallSamples == 0){
+  if(negativeTrainingImages.size() == 0){
     LOG(ERROR) << "No training samples found, exiting...";
     return;
   }
 
   for(int i = 0; i < negativeTrainingImages.size(); ++i){
     vector<Rect> found;
-    vector<Rect> falsePositives;
-    vector<Rect> truePositives;
     utils->setAnnotationsPath(trainAnnotationsPath);
-    utils->testImage(negativeTrainingImages[i], hog, found, falsePositives, truePositives,false);
+    utils->getDetections(negativeTrainingImages[i], hog, found,false);
 
     Mat originalImage = imread(negativeTrainingImages[i],CV_LOAD_IMAGE_COLOR);
 
-    for(int j = 0; j < falsePositives.size(); ++j){
+    for(int j = 0; j < found.size(); ++j){
       vector<float> featureVector;
       
       Rect originalRect(0,0,originalImage.cols,originalImage.rows);
-      Rect intersection = originalRect & falsePositives[j];
+      Rect intersection = originalRect & found[j];
       Mat patch = originalImage(intersection);
-      // LOG(INFO) << "Original size: " << originalImage.rows << " - " << originalImage.cols << " frame: " << intersection.tl() << " - " << intersection.br();
-      // rectangle(originalImage,intersection.tl(),intersection.br(),Scalar(0,0,255),2);
-      // imshow("False Positive", originalImage);
-      // waitKey(0);
 
       resize(patch,patch,Size(64,128));
       hog.compute(patch,featureVector,winStride,trainingPadding);
@@ -149,13 +118,13 @@ static void hardNegativeTraining(string& svmModelFile, HOGDescriptor& hog, LibSV
 
 int main(int argc, char** argv){
 
-  string kernelString = "SIGMOID";
+  string kernelString = "LINEAR";
   featuresFile += "HOG-"+kernelString+"_SVM/features.dat";
   svmModelFile += "HOG-"+kernelString+"_SVM/svmModel.dat";
-  logDir += "HOG-"+kernelString+"_SVM/log/";
+  //logDir += "HOG-"+kernelString+"_SVM/log/";
 
   //Starting the logging library
-  FLAGS_log_dir = logDir;
+  //FLAGS_log_dir = logDir;
   FLAGS_logtostderr = false;
   FLAGS_stderrthreshold = 0;
   google::InitGoogleLogging(argv[0]);
@@ -171,9 +140,10 @@ int main(int argc, char** argv){
   validExtensions.push_back(".png");
   
   //Get the positive images in the training folders
-  getSamples(sampleListPath+"pos/", positiveTrainingImages, validExtensions);
+  utils->setAnnotationsPath(trainAnnotationsPath);
+  utils->getSamples(sampleListPath+"pos/", positiveTrainingImages, validExtensions);
   //Get the negavive images in the training folders
-  getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
+  utils->getSamples(sampleListPath+"neg/", negativeTrainingImages, validExtensions);
 
   //Count the total number of samples
   unsigned long overallSamples = positiveTrainingImages.size()+negativeTrainingImages.size();
@@ -225,7 +195,7 @@ int main(int argc, char** argv){
   // Defining the parameters for the SVM
   CvSVMParams* myParams = new CvSVMParams(
     CvSVM::C_SVC,   // Type of SVM; using N classes here
-    CvSVM::SIGMOID,  // Kernel type
+    CvSVM::LINEAR,  // Kernel type
     3,              // Param (degree) for poly kernel only
     1.0,            // Param (gamma) for poly/rbf kernel only
     1.0,            // Param (coef0) for poly/sigmoid kernel only
